@@ -17,13 +17,14 @@ export function MyPageHeader({ userName, hasAdventurers, adventurerGroupName }: 
   return (
     <section className="mb-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-2 sm:mb-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-2 sm:mb-0 min-w-0 break-words ml-4">
           {userName}님이 등록한 모험단 : 
+          <span className="md:hidden"><br /></span>
           <span className={hasAdventurers && adventurerGroupName ? 'text-primary' : 'text-muted-foreground'}>
-            {hasAdventurers && adventurerGroupName ? adventurerGroupName : ' 등록된 모험단 없음'}
+            {hasAdventurers && adventurerGroupName ? adventurerGroupName : '등록된 모험단 없음'}
           </span>
         </h1>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-shrink-0 ml-0 sm:ml-4 mt-2 sm:mt-0">
           <Button size="icon" aria-label="모험단 설정">
             <Settings className="h-5 w-5" />
           </Button>

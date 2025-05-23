@@ -1,8 +1,9 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Inter as FontSans } from "next/font/google"
-import { ThemeProvider as NextThemesProvider } from 'next-themes'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
+import { ToastProvider } from "@/components/ui/use-toast"
 import "./globals.css"
 import { cn } from "@/lib/utils"
 
@@ -29,11 +30,17 @@ export default function RootLayout({ children }: RootLayoutProps) {
           fontSans.variable
         )}
       >
-        <NextThemesProvider attribute="class" defaultTheme="system" enableSystem>
-          <TooltipProvider>
-          {children}
-          </TooltipProvider>
-        </NextThemesProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ToastProvider>
+            {children}
+            <Toaster />
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
