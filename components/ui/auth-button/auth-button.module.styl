@@ -1,0 +1,28 @@
+.button
+  width: 100%
+  background-color: #2563eb
+  color: #ffffff
+  font-weight: bold
+  padding: 0.625rem 1.5rem
+  border-radius: 0.5rem
+  font-size: 0.875rem
+  border: none
+  cursor: pointer
+  transition: background-color 0.2s ease-in-out
+  
+  &:hover
+    background-color: #1d4ed8
+  
+  &:focus
+    outline: none
+    box-shadow: 0 0 0 2px #3b82f6
+  
+  &:disabled
+    opacity: 0.5
+    cursor: not-allowed
+  
+  :global(.dark) &
+    background-color: #db2777
+    
+    &:hover
+      background-color: #be185d
