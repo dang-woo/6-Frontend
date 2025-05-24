@@ -37,7 +37,6 @@ export function LoginForm() {
   const { toast } = useToast()
   const { setTokens, setUser, isLoading, setIsLoading } = useAuthStore()
   const [showPassword, setShowPassword] = React.useState(false)
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
@@ -51,6 +50,7 @@ export function LoginForm() {
 
   async function onSubmit(data: LoginFormValues) {
     setIsLoading(true)
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
@@ -75,29 +75,31 @@ export function LoginForm() {
         return
       }
 
-      if (response.ok && loginResult.success) {
-        if (!loginResult.data || !loginResult.data.accessToken || !loginResult.data.refreshToken) {
-          toast({
-            title: "로그인 실패",
-            description: "인증 토큰 정보가 없습니다.",
-            variant: "destructive",
-          })
-          setIsLoading(false)
-          return
-        }
-        setTokens(loginResult.data.accessToken, loginResult.data.refreshToken)
+      if (response.ok && loginResult.token && loginResult.token.accessToken) {
+        setTokens(loginResult.token.accessToken, loginResult.token.refreshToken)
 
         try {
           const meResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
             headers: {
-              Authorization: `Bearer ${loginResult.data.accessToken}`,
+              Authorization: `Bearer ${loginResult.token.accessToken}`,
             },
           })
           const meResult = await meResponse.json()
-          if (meResponse.ok && meResult.success) {
-            setUser({ userId: meResult.data.id, nickname: meResult.data.nickname })
+
+          if (meResponse.ok && meResult.success && meResult.userId) {
+            setUser({ userId: meResult.userId, nickname: meResult.nickname })
+            toast({
+              title: "로그인 성공",
+              description: loginResult.message || "잠시 후 마이페이지로 이동합니다.",
+            })
+            router.push("/my-page")
+            router.refresh()
           } else {
-            throw new Error(meResult.message || "사용자 정보를 가져오는데 실패했습니다.")
+            toast({
+                title: "사용자 정보 로드 실패",
+                description: meResult.message || "사용자 정보를 가져오는데 실패했습니다. 다시 로그인해주세요.",
+                variant: "destructive",
+            });
           }
         } catch (error) {
           toast({
@@ -106,12 +108,6 @@ export function LoginForm() {
             variant: "destructive",
           })
         }
-
-        toast({
-          title: "로그인 성공",
-          description: "잠시 후 메인 페이지로 이동합니다.",
-        })
-        router.push("/")
       } else {
         toast({
           title: "로그인 실패",
@@ -156,7 +152,7 @@ export function LoginForm() {
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                       <FaUser />
                     </div>
-                    <Input id="userId" placeholder="아이디를 입력하세요" className="pl-10" {...field} disabled={isSubmitting} />
+                    <Input id="userId" placeholder="아이디를 입력하세요" className="pl-10" {...field} disabled={isLoading} />
                   </div>
                 </FormControl>
                 <FormMessage />
@@ -175,7 +171,7 @@ export function LoginForm() {
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                       <FaLock />
                     </div>
-                    <Input id="password" type={showPassword ? "text" : "password"} placeholder="비밀번호를 입력하세요" className="pl-10" {...field} disabled={isSubmitting} />
+                    <Input id="password" type={showPassword ? "text" : "password"} placeholder="비밀번호를 입력하세요" className="pl-10" {...field} disabled={isLoading} />
                     <button
                       type="button"
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -194,9 +190,9 @@ export function LoginForm() {
           <Button
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-pink-600 dark:hover:bg-pink-700"
-            disabled={isSubmitting}
+            disabled={isLoading}
           >
-            {isSubmitting ? "로그인 중..." : "로그인"}
+            {isLoading ? "로그인 중..." : "로그인"}
           </Button>
         </form>
       </Form>

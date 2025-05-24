@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import Cookies from 'js-cookie'
 
 interface User {
   userId: string
@@ -38,79 +39,76 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       user: null,
-      isLoggedIn: false, // 초기값 false
-      isLoading: true, // 앱 시작 시 로딩 상태 true
+      isLoggedIn: false,
+      isLoading: true,
       setTokens: (accessToken, refreshToken) => {
-        set({ accessToken, refreshToken, isLoggedIn: !!accessToken, isLoading: false }) // 토큰 설정 시 isLoading false
+        set({ accessToken, refreshToken, isLoggedIn: !!accessToken, isLoading: false })
         if (isLocalStorageAvailable()) {
           localStorage.setItem('accessToken', accessToken)
           localStorage.setItem('refreshToken', refreshToken)
         }
+        try {
+          Cookies.set('accessToken', accessToken, { 
+            expires: 7, // 7일 후 만료
+            path: '/', 
+          });
+          console.log('[AuthStore] accessToken cookie set attempt. Value right after set:', Cookies.get('accessToken')); // 설정 직후 읽어보기
+        } catch (error) {
+          console.error('[AuthStore] Error setting accessToken cookie:', error);
+        }
       },
       setUser: (user) => {
-        set({ user, isLoading: false }) // 유저 정보 설정 시 isLoading false
+        set({ user, isLoading: false })
         if (isLocalStorageAvailable()) {
           localStorage.setItem('user', JSON.stringify(user))
         }
       },
       clearAuth: () => {
-        set({ accessToken: null, refreshToken: null, user: null, isLoggedIn: false, isLoading: false }) // 로그아웃 시 isLoading false
+        set({ accessToken: null, refreshToken: null, user: null, isLoggedIn: false, isLoading: false })
         if (isLocalStorageAvailable()) {
           localStorage.removeItem('accessToken')
           localStorage.removeItem('refreshToken')
           localStorage.removeItem('user')
         }
+        Cookies.remove('accessToken', { path: '/' });
       },
       initializeAuth: () => {
-        set({ isLoading: true }) // 초기화 시작 시 로딩 true
+        set({ isLoading: true })
+        const zustandAccessToken = get().accessToken;
+        const cookieAccessToken = Cookies.get('accessToken');
+
+        let finalAccessToken = zustandAccessToken || cookieAccessToken || null;
+        let finalRefreshToken = null;
+        let finalUser = null;
+
         if (isLocalStorageAvailable()) {
-          const accessToken = localStorage.getItem('accessToken')
-          const refreshToken = localStorage.getItem('refreshToken')
-          const userString = localStorage.getItem('user')
-          let user = null
+          finalRefreshToken = localStorage.getItem('refreshToken');
+          const userString = localStorage.getItem('user');
           if (userString) {
             try {
-              user = JSON.parse(userString)
+              finalUser = JSON.parse(userString);
             } catch (e) {
-              console.error('Failed to parse user from localStorage', e)
-              localStorage.removeItem('user')
+              console.error('Failed to parse user from localStorage', e);
+              localStorage.removeItem('user');
             }
           }
-          if (accessToken && refreshToken) {
-            set({ accessToken, refreshToken, user, isLoggedIn: true, isLoading: false })
-          } else {
-            set({ isLoading: false }) // 토큰 없으면 로딩 완료
-          }
+        }
+        
+        if (cookieAccessToken && !zustandAccessToken) {
+            finalAccessToken = cookieAccessToken;
+        }
+
+        if (finalAccessToken) {
+          set({ accessToken: finalAccessToken, refreshToken: finalRefreshToken, user: finalUser, isLoggedIn: true, isLoading: false });
         } else {
-          set({ isLoading: false }) // localStorage 사용 불가 시 로딩 완료
+          set({ isLoading: false });
         }
       },
-      setIsLoading: (isLoading: boolean) => set({ isLoading }), // setIsLoading 구현
+      setIsLoading: (isLoading: boolean) => set({ isLoading }),
     }),
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
-      // onRehydrateStorage는 persist v4부터 deprecated 되었습니다.
-      // 대신 hydration이 완료된 후 특정 로직을 실행하려면 아래와 같이 처리할 수 있습니다.
-      // (하지만 이 예제에서는 initializeAuth를 앱 시작 시 수동 호출하므로 필요하지 않을 수 있습니다.)
-      // onRehydrateStorage: () => {
-      //   return (state, error) => {
-      //     if (error) {
-      //       console.error('An error occurred during hydration', error)
-      //     } else {
-      //       // Hydration이 완료된 후 실행할 로직 (예: state.initializeAuth())
-      //       // 하지만 이미 앱 최상단에서 initializeAuth를 호출하고 있으므로 중복될 수 있음
-      //     }
-      //   }
-      // }
-      // version: 1, // 상태 버전 관리 (마이그레이션 필요 시)
-      // migrate: (persistedState, version) => {
-      //   if (version === 0) {
-      //     // 예시: 만약 이전 버전(0)에서 isLoading 상태가 없었다면 추가
-      //     // (persistedState as any).isLoading = false 
-      //   }
-      //   return persistedState as AuthState
-      // },
     }
   )
 )

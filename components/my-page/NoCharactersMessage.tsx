@@ -1,32 +1,30 @@
 'use client'
 
-import * as React from 'react'
-import Link from 'next/link'
-import { Users, PlusCircle } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Gamepad2, PlusCircle } from 'lucide-react'
 
-export function NoCharactersMessage() {
+interface NoCharactersMessageProps {
+  onOpenModalAction: () => void
+}
+
+export function NoCharactersMessage ({ onOpenModalAction }: NoCharactersMessageProps) {
   return (
-    <section className="flex justify-center">
-      <Card className="w-full max-w-2xl shadow-lg">
-        <CardContent className="py-16 flex flex-col items-center justify-center text-center">
-          <Users className="h-20 w-20 text-muted-foreground mb-6" />
-          <h2 className="text-xl font-semibold text-foreground mb-2">
-            등록된 캐릭터가 없습니다.
-          </h2>
-          <p className="text-muted-foreground mb-6">
-            새로운 캐릭터를 등록하여 모험을 관리해보세요.
-          </p>
-          <Button size="lg" asChild>
-            <Link href="/my-page/add-character"> {/* TODO: 캐릭터 등록 페이지 경로 확인 및 수정 */}
-              <PlusCircle className="mr-2 h-5 w-5" />
-              캐릭터 등록하러 가기
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </section>
+    <div className="flex flex-col items-center justify-center text-center py-10 px-4 mt-8 sm:mt-10 md:mt-12">
+      <Gamepad2 className="w-20 h-20 text-primary mb-5" strokeWidth={1.5} />
+      
+      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
+        아직 모험가가 없으시네요!
+      </h2>
+      
+      <p className="max-w-md text-base text-muted-foreground leading-relaxed mb-6">
+        RPGPT에 첫 캐릭터를 등록하고,
+        던전앤파이터 플레이 경험을 한층 업그레이드하세요!
+        상세 정보 조회부터 AI 분석까지, 모든 기능을 편리하게 이용할 수 있습니다.
+      </p>
+      
+      <Button onClick={onOpenModalAction} size="lg" className="text-base px-6 py-3 sm:text-lg sm:px-8 sm:py-3">
+        <PlusCircle className="mr-2 h-5 w-5" /> 첫 캐릭터 등록하기
+      </Button>
+    </div>
   )
 } 

@@ -22,7 +22,7 @@ export function Header({ className }: HeaderProps) {
   const { toggleSidebar, open: isSidebarOpen } = useSidebar()
   const isMobile = useIsMobile()
 
-  const { isAuthenticated, user, clearAuth } = useAuthStore()
+  const { isLoggedIn, user, clearAuth } = useAuthStore()
 
   const handleLogout = () => {
     clearAuth()
@@ -69,7 +69,7 @@ export function Header({ className }: HeaderProps) {
             <MoonIcon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </Button>
 
-          {isAuthenticated && user ? (
+          {isLoggedIn && user ? (
             <>
               <Button variant="ghost" asChild className="px-2 sm:px-3">
                 <Link href="/my-page" className="flex items-center">

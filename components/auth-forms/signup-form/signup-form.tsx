@@ -14,7 +14,6 @@ import { BadgeIcon } from "@/components/icons/badge-icon/badge-icon"
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,7 +24,6 @@ import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
-  InputOTPSeparator,
 } from "@/components/ui/input-otp"
 
 // Zod 스키마 정의
@@ -34,7 +32,7 @@ const signupFormSchema = z.object({
   userId: z.string().min(4, { message: "아이디는 4자 이상이어야 합니다." }).max(20, { message: "아이디는 20자 이하이어야 합니다." }),
   email: z.string().email({ message: "유효한 이메일 주소를 입력해주세요." }),
   password: z.string()
-    .min(8, { message: "비밀번호는 8자 이상이어야 합니다." })
+    .min(6, { message: "비밀번호는 6자 이상이어야 합니다." })
     .regex(/[0-9]/, { message: "비밀번호는 숫자를 하나 이상 포함해야 합니다." }),
   passwordConfirm: z.string(),
 }).refine(data => data.password === data.passwordConfirm, {
@@ -42,9 +40,12 @@ const signupFormSchema = z.object({
   path: ["passwordConfirm"], // 오류 메시지를 passwordConfirm 필드에 연결
 })
 
+// userId 필드만을 위한 별도 스키마 정의
+const userIdCheckSchema = z.string().min(4, { message: "아이디는 4자 이상이어야 합니다." }).max(20, { message: "아이디는 20자 이하이어야 합니다." });
+
 type SignupFormValues = z.infer<typeof signupFormSchema>
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 export function SignupForm() {
   const router = useRouter()
@@ -56,6 +57,9 @@ export function SignupForm() {
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [verificationCode, setVerificationCode] = React.useState("")
   const [isVerifyingCode, setIsVerifyingCode] = React.useState(false)
+  const [isCheckingUserId, setIsCheckingUserId] = React.useState(false)
+  const [isUserIdChecked, setIsUserIdChecked] = React.useState(false); // 아이디 중복 확인 완료 여부
+  const [userIdStatusMessage, setUserIdStatusMessage] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null); // 아이디 확인 결과 메시지
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupFormSchema),
@@ -72,6 +76,16 @@ export function SignupForm() {
   const handleToggleConfirmPassword = () => setShowConfirmPassword(prev => !prev)
 
   async function onSubmit(data: SignupFormValues) {
+    if (!isUserIdChecked) {
+      toast({ title: "아이디 확인 필요", description: "아이디 중복 확인 버튼을 눌러주세요.", variant: "destructive" });
+      form.setError("userId", {type: "manual", message: "아이디 중복 확인을 해주세요."});
+      return;
+    }
+    if (form.formState.errors.userId) {
+        const currentUserIdError = form.formState.errors.userId.message;
+        toast({ title: "회원가입 불가", description: currentUserIdError || "아이디 문제를 해결해주세요.", variant: "destructive" });
+        return;
+    }
     if (!isEmailVerified) {
       toast({
         title: "이메일 인증 필요",
@@ -105,6 +119,14 @@ export function SignupForm() {
         })
         router.push("/login")
       } else {
+        // 아이디 중복 오류 처리
+        if (result.message && (result.message.includes("아이디") || result.message.includes("userId"))) {
+          form.setError("userId", { type: "manual", message: result.message })
+        }
+        // 이메일 중복 오류 처리 (회원가입 단계에서 발생 시)
+        if (result.message && (result.message.includes("이메일") || result.message.includes("email"))) {
+          form.setError("email", { type: "manual", message: result.message })
+        }
         toast({
           title: "회원가입 실패",
           description: result.message || "입력 정보를 다시 확인해주세요.",
@@ -123,6 +145,55 @@ export function SignupForm() {
     }
   }
 
+  // 아이디 중복 확인 함수
+  const handleCheckUserId = async () => {
+    const userId = form.getValues("userId");
+    // setUserIdStatusMessage(null); // FormMessage로 통합하므로, 이 상태는 성공 메시지 전용으로 사용하거나 제거 고려
+
+    const userIdValidation = userIdCheckSchema.safeParse(userId);
+
+    if (!userIdValidation.success) {
+      if (userIdValidation.error.issues && userIdValidation.error.issues.length > 0) {
+        form.setError("userId", { 
+          type: "manual", 
+          message: userIdValidation.error.issues[0].message 
+        });
+      }
+      setIsUserIdChecked(false);
+      setUserIdStatusMessage(null); // 유효성 실패 시 이전 성공 메시지 제거
+      return;
+    }
+    // form.clearErrors("userId"); // API 호출 전에 여기서 에러를 지우면, 유효성 검사 에러도 지워질 수 있음. API 성공 시 지우도록 변경.
+
+    setIsCheckingUserId(true);
+    setUserIdStatusMessage(null); // API 호출 전 이전 메시지 초기화
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/check-userid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const result = await response.json();
+      setIsUserIdChecked(true); 
+
+      if (response.ok && result.success) {
+        form.clearErrors("userId"); // 성공 시에만 에러 클리어
+        setUserIdStatusMessage({ text: result.message, type: 'success' }); // 성공 메시지 표시
+      } else {
+        form.setError("userId", { type: "manual", message: result.message || "아이디를 사용할 수 없습니다." });
+        // setUserIdStatusMessage({ text: result.message || "아이디를 사용할 수 없습니다.", type: 'error' }); // FormMessage로 오류 표시, 이 줄은 제거하거나 주석 처리
+      }
+    } catch (error) {
+      setIsUserIdChecked(true); 
+      const errorMessage = "아이디 확인 중 오류 발생";
+      // toast({ title: "오류", description: errorMessage, variant: "destructive" }); // FormMessage로 오류 표시되므로 토스트는 중복일 수 있음 (선택적)
+      form.setError("userId", { type: "manual", message: errorMessage });
+      // setUserIdStatusMessage({ text: errorMessage, type: 'error' }); // FormMessage로 오류 표시, 이 줄은 제거하거나 주석 처리
+    } finally {
+      setIsCheckingUserId(false);
+    }
+  };
+
   const handleSendVerification = async () => {
     const email = form.getValues("email")
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -132,8 +203,13 @@ export function SignupForm() {
     }
     form.clearErrors("email") // 이전 오류 메시지 제거
     
+    // 인증 코드 발송 상태 관리 변수 추가
+    let verificationActuallySent = false; 
+
     try {
-      setIsVerificationSent(true) // 버튼 비활성화를 위해 우선 true로
+      // API 호출 전 버튼 비활성화 등을 위해 isVerificationSent를 true로 설정할 수 있으나,
+      // 실제 성공 여부에 따라 UI가 변경되도록 별도 변수(verificationActuallySent) 사용
+      setIsVerificationSent(true) 
       const response = await fetch(`${API_BASE_URL}/api/auth/send-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,14 +218,25 @@ export function SignupForm() {
       const result = await response.json()
       if (response.ok && result.success) {
         toast({ title: "인증 코드 발송", description: result.message })
-        // isVerificationSent는 여기서 관리하지 않고, 인증 코드 입력 UI가 나타나게 함
+        verificationActuallySent = true; // 성공 시 플래그 true
+        // setIsVerificationSent(true); // 이 부분은 UI 흐름에 따라 그대로 두거나 verificationActuallySent로 제어
       } else {
+        // 이메일 중복 오류 처리
+        if (result.message && (result.message.includes("이메일") || result.message.includes("email"))) {
+          form.setError("email", { type: "manual", message: result.message })
+        }
         toast({ title: "인증 코드 발송 실패", description: result.message, variant: "destructive" })
-        setIsVerificationSent(false) // 실패 시 다시 보낼 수 있도록
+        // setIsVerificationSent(false); // 실패 시 다시 보낼 수 있도록
       }
     } catch (error) {
       toast({ title: "오류", description: "인증 코드 발송 중 오류 발생", variant: "destructive" })
-      setIsVerificationSent(false)
+      // setIsVerificationSent(false);
+    } finally {
+        // 실제 인증 코드가 성공적으로 발송되었을 때만 isVerificationSent를 true로 유지
+        // 그렇지 않으면 (오류 발생 또는 중복 등) false로 설정하여 UI가 다음 단계로 넘어가지 않도록 함
+        if (!verificationActuallySent) {
+            setIsVerificationSent(false);
+        }
     }
   }
   
@@ -235,14 +322,41 @@ export function SignupForm() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel htmlFor="userId">아이디</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <FaUser />
+                <div className="flex gap-2 items-start">
+                  <FormControl className="flex-1">
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <FaUser />
+                      </div>
+                      <Input 
+                        id="userId" 
+                        placeholder="아이디를 입력하세요" 
+                        className="pl-10" 
+                        {...field} 
+                        disabled={isSubmitting || isCheckingUserId}
+                        onChange={(e) => {
+                          field.onChange(e); // react-hook-form의 기본 onChange 유지
+                          if (isUserIdChecked) setIsUserIdChecked(false); // 아이디 변경 시 확인 상태 초기화
+                          if (form.formState.errors.userId) form.clearErrors("userId"); // 기존 오류 메시지 제거
+                          setUserIdStatusMessage(null); // 상태 메시지 초기화
+                        }}
+                      />
                     </div>
-                    <Input id="userId" placeholder="아이디를 입력하세요" className="pl-10" {...field} disabled={isSubmitting} />
-                  </div>
-                </FormControl>
+                  </FormControl>
+                  <Button
+                    type="button"
+                    onClick={handleCheckUserId}
+                    disabled={isCheckingUserId || !field.value || (form.formState.errors.userId && form.formState.errors.userId.type !== 'manualNotChecked')}
+                    className="whitespace-nowrap"
+                  >
+                    {isCheckingUserId ? "확인 중..." : "중복 확인"}
+                  </Button>
+                </div>
+                {userIdStatusMessage && userIdStatusMessage.type === 'success' && (
+                  <p className={`text-sm mt-1 text-green-600 dark:text-green-500`}>
+                    {userIdStatusMessage.text}
+                  </p>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -267,7 +381,7 @@ export function SignupForm() {
                     disabled={isSubmitting || isVerificationSent || isEmailVerified}
                     className="bg-blue-600 hover:bg-blue-700 dark:bg-pink-600 dark:hover:bg-pink-700 whitespace-nowrap"
                   >
-                    {isVerificationSent && !isEmailVerified ? "재전송" : (isEmailVerified ? "인증완료" : "인증코드 발송")}
+                    {isVerificationSent ? "재전송" : "인증코드 발송"}
                   </Button>
                 </div>
                 {isVerificationSent && !isEmailVerified && (
@@ -286,9 +400,6 @@ export function SignupForm() {
                           <InputOTPSlot index={0} />
                           <InputOTPSlot index={1} />
                           <InputOTPSlot index={2} />
-                        </InputOTPGroup>
-                        <InputOTPSeparator />
-                        <InputOTPGroup>
                           <InputOTPSlot index={3} />
                           <InputOTPSlot index={4} />
                           <InputOTPSlot index={5} />

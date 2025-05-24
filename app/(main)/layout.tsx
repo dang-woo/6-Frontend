@@ -36,12 +36,16 @@ function LayoutStructure({ children }: { children: React.ReactNode }) {
     <div className="relative flex min-h-screen flex-col w-full">
       <Header />
       <div className={cn(
-        'flex flex-1 md:grid overflow-y-auto',
-        isSidebarOpen ? 'md:grid-cols-[240px_1fr]' : 'md:grid-cols-[0px_1fr]',
-        'transition-all duration-200 ease-in-out'
+        'flex flex-1 overflow-y-auto', // 기본은 flex
+        {
+          'md:grid': true, // md 이상에서만 grid
+          'md:grid-cols-[240px_1fr]': isSidebarOpen, // md 이상, 사이드바 열렸을 때
+          'md:grid-cols-[64px_1fr]': !isSidebarOpen, // md 이상, 사이드바 닫혔을 때
+        },
+        // 'transition-all duration-200 ease-in-out' // 이 트랜지션은 AppSidebar 자체로 이동하는 것이 좋을 수 있음
       )}>
-        <AppSidebar /> {/* AppSidebar 컴포넌트 사용 */}
-        <main className="flex flex-col flex-1 px-4 py-6 md:px-6 md:py-8 md:h-full">
+        <AppSidebar />
+        <main className="flex flex-col flex-1 px-4 py-6 md:px-6 md:py-8 md:h-full overflow-x-hidden">
            {children}
         </main>
       </div>

@@ -7,7 +7,20 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'img-api.neople.co.kr',
+        port: '',
+        pathname: '/df/items/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img-api.neople.co.kr',
+        port: '',
+        pathname: '/df/servers/**',
+      },
+    ],
   },
 }
 

@@ -39,14 +39,20 @@ const sidebarFooterItems: SidebarMenuItemConfig[] = [
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { open: isSidebarOpen, isMobile } = useSidebar()
+  const { open: isSidebarOpen, isMobile, setOpen: setIsSidebarOpen } = useSidebar()
+
+  const handleLinkClick = () => {
+    if (isMobile && isSidebarOpen) {
+      setIsSidebarOpen(false)
+    }
+  }
 
   const renderMenuItems = (items: SidebarMenuItemConfig[], isSubmenu = false, isFooter = false) => {
     return items.map((item, index) => {
       const isActive = pathname === item.href
       const hasChildren = item.children && item.children.length > 0
 
-      const shouldShowText = isMobile || isSidebarOpen
+      const shouldShowText = (!isMobile && isSidebarOpen) || (isMobile)
 
       if (isSubmenu) {
         return (
@@ -57,6 +63,7 @@ export function AppSidebar() {
               asChild={!hasChildren}
               target={item.target}
               className="h-10"
+              onClick={handleLinkClick}
             >
               <item.icon className="mr-2 h-5 w-5 flex-shrink-0" />
               {shouldShowText && <span>{item.label}</span>}
@@ -76,8 +83,9 @@ export function AppSidebar() {
           <SidebarMenuButton
             isActive={isActive}
             asChild={!hasChildren}
-            tooltip={isSidebarOpen ? undefined : item.label}
+            tooltip={!isMobile && !isSidebarOpen ? item.label : undefined}
             className="h-11 p-3"
+            onClick={hasChildren ? undefined : handleLinkClick}
           >
             {hasChildren ? (
               <span className="flex items-center w-full">
@@ -100,17 +108,28 @@ export function AppSidebar() {
   return (
     <Sidebar
       className={cn(
-        "border-r border-border/40 dark:border-neutral-800 transition-all duration-200 ease-in-out",
-        isSidebarOpen ? 'w-[240px]' : 'w-16 md:w-16',
-        "overflow-y-auto overflow-x-hidden h-full flex flex-col"
+        "border-r border-border/40 dark:border-neutral-800",
+        "overflow-y-auto overflow-x-hidden h-full flex flex-col",
+        "transition-all duration-300 ease-in-out",
+        isMobile
+          ? 'fixed inset-y-0 left-0 z-50 w-[270px] bg-background shadow-xl transform'
+          : (isSidebarOpen ? 'w-[240px]' : 'w-16'),
+        isMobile && !isSidebarOpen && '-translate-x-full opacity-0',
+        !isMobile && !isSidebarOpen && 'p-0',
       )}
-      collapsible="icon"
+      collapsible={!isMobile ? "icon" : undefined}
     >
-      <SidebarContent className="flex-grow p-2 pt-4">
+      <SidebarContent className={cn(
+        "flex-grow p-2 pt-4",
+        !isSidebarOpen && !isMobile && "overflow-hidden"
+      )}>
         <SidebarMenu>{renderMenuItems(sidebarMenuItems)}</SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="p-2 mt-auto">
+      <SidebarFooter className={cn(
+        "p-2 mt-auto",
+        !isSidebarOpen && !isMobile && "overflow-hidden"
+      )}>
         <SidebarMenu>{renderMenuItems(sidebarFooterItems, false, true)}</SidebarMenu>
       </SidebarFooter>
     </Sidebar>

@@ -13,7 +13,7 @@ const fontSans = FontSans({
 })
 
 export const metadata: Metadata = {
-  title: "RPGPT",
+  title: "RPGPT | 던파의 모든 것",
   description: "RPGPT Application",
 }
 
