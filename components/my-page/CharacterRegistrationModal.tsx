@@ -9,7 +9,7 @@ import type { CharacterSearchResult, ServerOption } from '@/types/dnf'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { useToast } from '@/components/ui/use-toast'
+import { useToast } from "@/components/ui/use-toast"
 import { Loader2, Search, UserPlus } from 'lucide-react'
 import Image from 'next/image'
 import { Card } from '@/components/ui/card'
@@ -46,21 +46,28 @@ export function CharacterRegistrationModal ({ isOpen, onCloseAction, onCharacter
   const [isLoading, setIsLoading] = React.useState(false)
   const [selectedCharacter, setSelectedCharacter] = React.useState<CharacterSearchResult | null>(null)
 
-  const { control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof searchSchema>>({
+  const { control, handleSubmit, formState: { errors }, reset } = useForm<z.infer<typeof searchSchema>>({
     resolver: zodResolver(searchSchema),
     defaultValues: { server: '', characterName: '' }
   })
 
+  React.useEffect(() => {
+    if (!isOpen) {
+      setSearchResults([]);
+      setSelectedCharacter(null);
+      reset({ server: '', characterName: '' });
+    }
+  }, [isOpen, reset]);
+
   const onSubmit = async (data: z.infer<typeof searchSchema>) => {
     if (!API_BASE_URL) {
-      toast({ title: '오류', description: 'API 요청 주소가 설정되지 않았습니다.', variant: 'destructive' })
+      toast({ title: '오류', description: 'API 요청 주소가 설정되지 않았습니다.', variant: 'destructive' });
       return
     }
     setIsLoading(true)
     setSearchResults([])
     setSelectedCharacter(null)
     try {
-      // 실제 API 요청 시 'adventure'는 'adven'으로 변경, 'all'은 지원 여부 확인
       const serverId = data.server === 'adventure' ? 'adven' : data.server
       const response = await fetch(`${API_BASE_URL}/api/df/search?server=${serverId}&name=${data.characterName}`)
       if (!response.ok) {
@@ -68,14 +75,13 @@ export function CharacterRegistrationModal ({ isOpen, onCloseAction, onCharacter
         throw new Error(errorData.message || '캐릭터 검색에 실패했습니다.')
       }
       const results = await response.json()
-      // API 응답이 CharacterSearchResponse 형태일 경우, results.rows 사용
       const characters = results.rows || (Array.isArray(results) ? results : [])
       setSearchResults(characters)
       if (characters.length === 0) {
-        toast({ title: '검색 결과 없음', description: '조건에 맞는 캐릭터를 찾을 수 없습니다.' })
+        toast({ title: '검색 결과 없음', description: '조건에 맞는 캐릭터를 찾을 수 없습니다.' });
       }
     } catch (error: any) {
-      toast({ title: '검색 오류', description: error.message, variant: 'destructive' })
+      toast({ title: '검색 오류', description: error.message || '캐릭터 검색 중 오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setIsLoading(false)
     }
@@ -91,57 +97,69 @@ export function CharacterRegistrationModal ({ isOpen, onCloseAction, onCharacter
           return;
         }
 
-        const token = localStorage.getItem('accessToken'); // localStorage에서 토큰 가져오기
+        const token = localStorage.getItem('accessToken');
         if (!token) {
           toast({ title: '인증 오류', description: '로그인이 필요합니다. 다시 로그인해주세요.', variant: 'destructive' });
           setIsLoading(false);
-          // 필요시 로그인 페이지로 리디렉션
-          // router.push('/login');
           return;
         }
 
-        const response = await fetch(`${API_BASE_URL}/api/characters`, {
+        const response = await fetch(`${API_BASE_URL}/api/my-page/characters`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` // 헤더에 토큰 추가
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             serverId: selectedCharacter.serverId,
-            characterName: selectedCharacter.characterName
+            characterId: selectedCharacter.characterId,
+            characterName: selectedCharacter.characterName,
+            jobGrowName: selectedCharacter.jobGrowName,
+            level: selectedCharacter.level,
+            fame: selectedCharacter.fame,
+            characterImageUrl: selectedCharacter.imageUrl
           })
         });
 
         const responseText = await response.text(); 
-        console.log('Server response text:', responseText); 
-
         let result;
         try {
           result = JSON.parse(responseText); 
         } catch (e) {
-          console.error('JSON parsing error:', e);
-          throw new Error(`서버 응답 처리 중 오류가 발생했습니다. Status: ${response.status}, 응답 내용: ${responseText}`);
+          // 응답이 JSON이 아닐 경우, responseText를 그대로 사용하거나 일반적인 오류 메시지를 표시
+          if (!response.ok) {
+             toast({ title: '등록 오류', description: `서버 응답 처리 중 오류가 발생했습니다. (Status: ${response.status})`, variant: 'destructive' });
+          } else {
+            // response.ok는 true인데 JSON 파싱 실패한 경우 (드문 경우)
+            toast({ title: '오류', description: '서버 응답을 처리할 수 없습니다.', variant: 'destructive' });
+          }
+          setIsLoading(false);
+          return; // JSON 파싱 실패 시 더 이상 진행하지 않음
         }
 
         if (!response.ok) {
-          // 401, 403 등의 인증 오류도 여기서 잡힐 수 있음
-          const errorMessage = result.message || `캐릭터 등록에 실패했습니다. (Status: ${response.status})`;
-          throw new Error(errorMessage);
+          if (result.errorCode === 'ALREADY_REGISTERED') {
+            toast({ title: '등록 실패', description: '이미 마이페이지에 등록된 캐릭터입니다.', variant: 'destructive' });
+          } else if (result.errorCode === 'ADVENTURE_NAME_MISMATCH') {
+            toast({ title: '등록 실패', description: '등록된 계정의 모험단과 캐릭터의 모험단이 일치하지 않습니다.', variant: 'destructive' });
+          } else {
+            toast({ title: '등록 실패', description: result.message || `알 수 없는 오류로 등록에 실패했습니다. (Status: ${response.status})`, variant: 'destructive' });
+          }
+        } else { // response.ok === true
+          toast({
+            title: '캐릭터 등록 성공',
+            description: `${result.characterName || selectedCharacter.characterName} (${result.serverId || selectedCharacter.serverId}) 캐릭터가 성공적으로 등록되었습니다.`
+          });
+          onCharacterRegisteredAction({ 
+            ...selectedCharacter, 
+            characterId: result.characterId || selectedCharacter.characterId, 
+            adventureName: result.adventureName || selectedCharacter.adventureName, 
+          });
+          onCloseAction(); 
         }
-
-        toast({
-          title: '캐릭터 등록 성공',
-          description: `${result.characterName || selectedCharacter.characterName} (${result.serverId || selectedCharacter.serverId}) 캐릭터가 성공적으로 등록되었습니다.`
-        });
-        onCharacterRegisteredAction({ 
-          ...selectedCharacter, 
-          characterId: result.characterId || selectedCharacter.characterId, 
-          adventureName: result.adventureName || selectedCharacter.adventureName, 
-        });
-        onCloseAction(); 
       } catch (error: any) {
-        console.error('캐릭터 등록 오류:', error); 
-        toast({ title: '캐릭터 등록 오류', description: error.message, variant: 'destructive' });
+        // 네트워크 오류 또는 예상치 못한 JS 오류
+        toast({ title: '등록 중 오류', description: error.message || '캐릭터 등록 중 알 수 없는 오류가 발생했습니다.', variant: 'destructive' });
       } finally {
         setIsLoading(false); 
       }

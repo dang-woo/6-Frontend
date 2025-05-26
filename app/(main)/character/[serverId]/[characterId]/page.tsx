@@ -1,7 +1,4 @@
 import { DFCharacterResponseDTO } from '@/types/dnf';
-import Image from 'next/image';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Terminal, ShieldCheck, Sparkles, Gem, Swords, ScrollText, SquareStack, FlagIcon, Star } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,7 +11,9 @@ import { TalismanSection } from '@/components/character-details/TalismanSection'
 import { SkillStyleSection } from '@/components/character-details/SkillStyleSection';
 import { BuffEnhanceSection } from '@/components/character-details/BuffEnhanceSection';
 import { SetItemSection } from '@/components/character-details/SetItemSection';
+import { OverviewSection } from '@/components/character-details/OverviewSection';
 import { FlagSection } from '@/components/character-details/FlagSection';
+import { FloatingChatButton } from '@/components/character-details/FloatingChatButton';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -46,53 +45,6 @@ interface CharacterDetailPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-// 기본 정보 섹션 (개요) - 페이지 상단에 항상 표시됨
-function OverviewSection({ character, serverId }: { character: DFCharacterResponseDTO; serverId: string }) {
-  const lastUpdatedString = Array.isArray(character.lastUpdated)
-    ? new Date(character.lastUpdated[0], character.lastUpdated[1] - 1, character.lastUpdated[2], character.lastUpdated[3], character.lastUpdated[4], character.lastUpdated[5]).toLocaleString()
-    : character.lastUpdated ? new Date(String(character.lastUpdated)).toLocaleString() : '정보 없음';
-
-  return (
-    <Card className="overflow-hidden mb-6 shadow-lg">
-      <CardHeader className="bg-muted/30 p-4 sm:p-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-          {character.imageUrl && (
-            <div className="relative w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 flex-shrink-0">
-              <Image
-                src={character.imageUrl}
-                alt={character.characterName}
-                fill
-                sizes="(max-width: 640px) 112px, (max-width: 768px) 128px, 144px"
-                className="rounded-lg border bg-card object-cover aspect-square shadow-md"
-                priority
-                unoptimized
-              />
-            </div>
-          )}
-          <div className="flex-1">
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-primary">{character.characterName}</h1>
-            <p className="text-lg sm:text-xl text-muted-foreground mt-1">
-              Lv.{character.level} {character.jobGrowName} <span className="text-sm sm:text-base">({character.jobName})</span>
-            </p>
-            <div className="flex flex-wrap gap-2 mt-2 sm:mt-3">
-              <Badge variant="secondary" className="text-xs sm:text-sm">서버: {serverId}</Badge>
-              <Badge variant="outline" className="text-xs sm:text-sm">모험단: {character.adventureName || '-'}</Badge>
-              <Badge variant="outline" className="text-xs sm:text-sm">길드: {character.guildName || '-'}</Badge>
-            </div>
-            <p className="text-xl sm:text-2xl font-semibold mt-3 sm:mt-4">명성: <span className="text-amber-500">{character.fame || '정보 없음'}</span></p>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground/80">추가 정보</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-xs sm:text-sm">
-          <p><strong className="font-medium text-muted-foreground">최근 업데이트:</strong> {lastUpdatedString}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default async function CharacterDetailPage({ params, searchParams: _searchParams }: CharacterDetailPageProps) {
   const { serverId, characterId } = await params;
   
@@ -113,7 +65,7 @@ export default async function CharacterDetailPage({ params, searchParams: _searc
   }
 
   return (
-    <div className="px-1 sm:px-2 py-6 w-full max-w-6xl mx-auto">
+    <div className="px-1 sm:px-2 py-6 w-full max-w-6xl mx-auto relative">
       <OverviewSection character={character} serverId={serverId} />
 
       <Tabs defaultValue="equipment" className="w-full mt-6">
@@ -153,6 +105,8 @@ export default async function CharacterDetailPage({ params, searchParams: _searc
           <FlagSection flagData={character.flag} />
         </TabsContent>
       </Tabs>
+      
+      <FloatingChatButton />
     </div>
   );
 } 

@@ -4,6 +4,7 @@ import { Inter as FontSans } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { ToastProvider } from "@/components/ui/use-toast"
+// import { Toaster as HotToaster } from 'react-hot-toast';
 import "./globals.css"
 import { cn } from "@/lib/utils"
 
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
             {children}
             <Toaster />
           </ToastProvider>
+          {/* <HotToaster position="top-right" /> */}
         </ThemeProvider>
       </body>
     </html>

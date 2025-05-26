@@ -6,9 +6,51 @@ import { Badge } from '@/components/ui/badge'
 // import { Separator } from '@/components/ui/separator' // 사용 X
 // DFCharacterResponseDTO 사용 X
 import { EquipmentDTO, EnchantDTO, FusionOptionDTO, StatusDetailDTO } from '@/types/dnf'
+import { useEffect, useState } from 'react'
 
 interface EquipmentSectionProps {
   equipment: EquipmentDTO[] | undefined
+}
+
+// getItemRarityVariant (공통 유틸로 분리 권장)
+const getItemRarityVariant = (rarity: string): 'default' | 'secondary' | 'destructive' | 'outline' | null | undefined => {
+  switch (rarity) {
+    case '커먼':
+    case '언커먼':
+      return 'secondary'
+    case '레어':
+      return 'default'
+    case '유니크':
+      return 'default'
+    case '에픽':
+    case '신화': // 신화도 에픽과 유사한 색상으로 처리하거나 커스텀 필요
+      return 'destructive' 
+    case '레전더리':
+      return 'default' // 주황/노랑 계열 Badge 스타일 따라감
+    case '태초':
+      return 'default' // 특별한 색상 (Badge에서 직접 처리되거나 커스텀 필요)
+    default:
+      return 'outline'
+  }
+}
+
+// fetchItemImageUrlFromProxy (공통 유틸로 분리 권장)
+async function fetchItemImageUrlFromProxy(itemId: string): Promise<string | null> {
+  if (!itemId) return null
+  try {
+    const response = await fetch(`/api/neople/item-image/${itemId}`)
+    if (!response.ok) {
+      console.error(`Failed to fetch image URL for item ${itemId}: ${response.statusText}`)
+      const errorData = await response.json()
+      console.error('Error data from proxy:', errorData)
+      return null
+    }
+    const data = await response.json()
+    return data.imageUrl || null
+  } catch (error) {
+    console.error(`Error fetching image URL for item ${itemId} via proxy:`, error)
+    return null
+  }
 }
 
 function renderStatusDetails(status: StatusDetailDTO[] | undefined | null) {
@@ -52,6 +94,36 @@ function renderFusionOption(fusionOption: FusionOptionDTO | undefined | null) {
 // function renderTuneDetails(tune: TuneDTO[] | undefined | null) { ... }
 
 export function EquipmentSection({ equipment }: EquipmentSectionProps) {
+  const [equipmentImageUrls, setEquipmentImageUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (equipment) {
+      const fetchPromises = equipment.map(async (item) => {
+        if (item.itemId) {
+          let finalUrl = '/images/placeholder.png'; // 기본 플레이스홀더
+          if (item.itemImage) {
+            finalUrl = item.itemImage;
+          } else {
+            const proxyUrl = await fetchItemImageUrlFromProxy(item.itemId);
+            if (proxyUrl) finalUrl = proxyUrl;
+          }
+          return { itemId: item.itemId, url: finalUrl };
+        }
+        return null; 
+      }).filter(p => p !== null) as Promise<{itemId: string, url: string}>[];
+
+      Promise.all(fetchPromises).then(results => {
+        const urls: Record<string, string> = {};
+        results.forEach(r => {
+          if (r.itemId && r.url) {
+            urls[r.itemId] = r.url;
+          }
+        });
+        setEquipmentImageUrls(urls);
+      });
+    }
+  }, [equipment]);
+
   if (!equipment || equipment.length === 0) {
     return (
       <Card>
@@ -68,35 +140,50 @@ export function EquipmentSection({ equipment }: EquipmentSectionProps) {
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold tracking-tight mb-4">장착 장비</h2>
-      <ul className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4">
-        {equipment.map((equip) => (
-          <li key={equip.itemId || equip.itemName} className="border rounded-lg p-3 hover:bg-muted/50 transition-colors">
-            <div className="flex items-start gap-3">
-              {equip.itemImage && (
-                <div className="relative w-12 h-12 flex-shrink-0 mt-1">
+      <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
+        {equipment.map((equip) => {
+          const itemImgSrc = equip.itemId ? (equipmentImageUrls[equip.itemId] || equip.itemImage || '/images/placeholder.png') : (equip.itemImage || '/images/placeholder.png');
+
+          return (
+          <li key={equip.itemId || equip.itemName} className="border rounded-lg p-3 hover:bg-muted/50 transition-colors flex flex-col">
+            <div className="flex items-start gap-3 flex-grow">
+              <div className="relative w-12 h-12 flex-shrink-0 mt-1 bg-muted/20 rounded-md flex items-center justify-center overflow-hidden border">
+                {equip.itemId ? (
                   <Image 
-                    src={equip.itemImage} 
+                    src={itemImgSrc} 
                     alt={equip.itemName} 
                     fill 
                     sizes="48px" 
-                    className="rounded-md bg-background object-contain border"
+                    className="rounded-md bg-background object-contain"
                     unoptimized 
+                    onError={() => {
+                      if (equip.itemImage && equip.itemId && equipmentImageUrls[equip.itemId] !== '/images/placeholder.png') {
+                        fetchItemImageUrlFromProxy(equip.itemId).then(url => {
+                          if (url) setEquipmentImageUrls(prev => ({ ...prev, [equip.itemId!]: url }))
+                          else setEquipmentImageUrls(prev => ({ ...prev, [equip.itemId!]: '/images/placeholder.png' }))
+                        })
+                      }
+                    }}
                   />
+                ) : (
+                  <span className="text-xs text-muted-foreground">이미지 없음</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col">
+                <div>
+                  <div className="flex justify-between items-start">
+                    <h3 
+                      className={`text-md font-semibold ${equip.itemRarity === '태초' ? 'text-yellow-400' : equip.itemRarity === '에픽' ? 'text-pink-500' : equip.itemRarity === '레전더리' ? 'text-orange-500' : equip.itemRarity === '신화' ? 'text-purple-400' : 'text-foreground'}`}
+                      title={equip.itemName}
+                    >
+                      {equip.itemName}
+                    </h3>
+                    <Badge variant={equip.itemGradeName ? getItemRarityVariant(equip.itemRarity) : 'outline'} className="text-xs ml-2 whitespace-nowrap">{equip.itemGradeName || '등급 정보 없음'}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{equip.slotName}</p>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start">
-                  <h3 
-                    className={`text-md font-semibold ${equip.itemRarity === '태초' ? 'text-yellow-400' : equip.itemRarity === '에픽' ? 'text-pink-500' : equip.itemRarity === '레전더리' ? 'text-orange-500' : equip.itemRarity === '신화' ? 'text-purple-400' : 'text-foreground'}`}
-                    title={equip.itemName}
-                  >
-                    {equip.itemName}
-                  </h3>
-                  <Badge variant={equip.itemGradeName ? 'secondary' : 'outline'} className="text-xs ml-2 whitespace-nowrap">{equip.itemGradeName || '등급 정보 없음'}</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{equip.slotName}</p>
                 
-                <div className="mt-1 space-y-0.5 text-xs">
+                <div className="mt-1 space-y-0.5 text-xs flex-grow">
                   {equip.reinforce && equip.reinforce !== '0' && 
                     <div>강화/증폭: <Badge variant="outline" className="px-1 py-0 font-normal">+{equip.reinforce} {equip.amplificationName || ''}</Badge></div>
                   }
@@ -107,7 +194,7 @@ export function EquipmentSection({ equipment }: EquipmentSectionProps) {
               </div>
             </div>
           </li>
-        ))}
+        )})}
       </ul>
     </div>
   );

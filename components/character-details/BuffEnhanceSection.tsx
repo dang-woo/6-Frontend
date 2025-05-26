@@ -32,29 +32,29 @@ interface BuffEnhanceSectionProps {
 }
 
 const getNeopleItemImageUrl = (itemId: string) => {
-  return `https://img-api.neople.co.kr/df/items/${itemId}`
+  return `https://img-api.neople.co.kr/df/items/${itemId}`;
 }
 
 const getItemRarityVariant = (
   rarity: string | null | undefined
 ): 'default' | 'secondary' | 'destructive' | 'outline' | null | undefined => {
-  if (!rarity) return 'outline'
+  if (!rarity) return 'outline';
   switch (rarity) {
     case '커먼':
     case '언커먼':
-      return 'secondary'
+      return 'secondary';
     case '레어':
-      return 'default'
+      return 'default';
     case '유니크':
-      return 'default'
+      return 'default';
     case '에픽':
-      return 'destructive'
+      return 'destructive';
     case '레전더리':
     case '신화':
     case '태초':
-      return 'default'
+      return 'default';
     default:
-      return 'outline'
+      return 'outline';
   }
 }
 
@@ -78,13 +78,18 @@ export function BuffEnhanceSection ({ buffSkill }: BuffEnhanceSectionProps) {
     )
   }
 
-  const { skillInfo, equipment, avatar, creature } = buffSkill
+  const { skillInfo, equipment, avatar, creature } = buffSkill;
 
   const renderSkillInfoDesc = (desc: string, values: string[]) => {
-    return desc.replace(
-      /\\{value(\\d+)\\}/g,
-      (_: string, indexStr: string) => values[parseInt(indexStr, 10) - 1] || ''
-    )
+    if (!desc || !values) return '';
+    return desc.replace(/\{value(\d+)\}/g, (match, indexStr) => {
+      const index = parseInt(indexStr, 10) - 1;
+      const value = values[index];
+      if (value !== undefined) {
+        return (value === '-' || value.trim() === '') ? '-' : value;
+      }
+      return match;
+    });
   }
 
   return (
@@ -100,7 +105,7 @@ export function BuffEnhanceSection ({ buffSkill }: BuffEnhanceSectionProps) {
             {skillInfo.option.desc && (
               <CardContent className='p-4 text-sm'>
                 <p className='whitespace-pre-line text-gray-700 dark:text-gray-300'>
-                  {renderSkillInfoDesc(skillInfo.option.desc, skillInfo.option.values)}
+                  {renderSkillInfoDesc(skillInfo.option.desc, skillInfo.option.values || [])}
                 </p>
               </CardContent>
             )}
@@ -146,7 +151,6 @@ export function BuffEnhanceSection ({ buffSkill }: BuffEnhanceSectionProps) {
                         </div>
                       </div>
                     </CardHeader>
-                    {/* 추가적인 장비 옵션이 있다면 CardContent에 표시 */}
                   </Card>
                 )
               })}
@@ -251,7 +255,6 @@ export function BuffEnhanceSection ({ buffSkill }: BuffEnhanceSectionProps) {
                       </Badge>
                     </div>
                   </CardHeader>
-                  {/* 크리쳐의 추가 옵션 정보가 있다면 CardContent에 표시 */}
                 </Card>
               )
             })}

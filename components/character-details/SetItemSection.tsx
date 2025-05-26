@@ -39,7 +39,7 @@ const getItemRarityVariant = (
 export function SetItemSection ({ setItemInfo }: SetItemSectionProps) {
   if (!setItemInfo || setItemInfo.length === 0) {
     return (
-      <Card>
+      <Card className='text-center'>
         <CardHeader>
           <CardTitle>세트 아이템 효과</CardTitle>
         </CardHeader>
@@ -51,17 +51,20 @@ export function SetItemSection ({ setItemInfo }: SetItemSectionProps) {
   }
 
   return (
-    <div className='space-y-4'>
+    <div className='space-y-6 text-center'>
       {setItemInfo.map((set, index) => (
-        <Card key={set.setItemName || index} className='overflow-hidden shadow-md'>
-          <CardHeader className='bg-muted/20 p-4'>
-            <CardTitle className='text-xl font-bold'>{set.setItemName}</CardTitle>
-            <Badge variant={getItemRarityVariant(set.setItemRarityName)} className='mt-1 text-sm'>
+        <Card key={set.setItemName || index} className='overflow-hidden shadow-lg w-full  mx-auto'>
+          <CardHeader className='bg-muted/20 p-4 text-center'>
+            <CardTitle className='text-xl font-bold text-center'>{set.setItemName}</CardTitle>
+            <Badge 
+              variant={getItemRarityVariant(set.setItemRarityName)} 
+              className='mt-2 text-sm w-fit mx-auto'
+            >
               {set.setItemRarityName} 세트
             </Badge>
           </CardHeader>
           {set.active && (
-            <CardContent className='p-4 text-sm'>
+            <CardContent className='p-4 text-sm text-center'>
               {set.active.explain && (
                 <div className='mb-3'>
                   <h4 className='font-semibold text-muted-foreground mb-1'>세트 효과 설명:</h4>
@@ -77,7 +80,7 @@ export function SetItemSection ({ setItemInfo }: SetItemSectionProps) {
               {set.active.status && set.active.status.length > 0 && (
                 <div className='mb-3'>
                   <h4 className='font-semibold text-muted-foreground mb-1'>추가 스탯:</h4>
-                  <ul className='list-disc list-inside space-y-0.5 pl-2'>
+                  <ul className='list-disc list-inside space-y-0.5 pl-2 inline-block text-left'>
                     {set.active.status.map((stat: StatusDetailDTO, i: number) => (
                       <li key={i} className='text-gray-700 dark:text-gray-300'>
                         {stat.name}: <span className='font-semibold'>{stat.value}</span>

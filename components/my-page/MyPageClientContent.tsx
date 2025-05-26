@@ -8,7 +8,7 @@ import { CharacterRegistrationModal } from '@/components/my-page/CharacterRegist
 import type { CharacterSearchResult, ServerOption } from '@/types/dnf'
 import { CharacterCard } from '@/components/search/CharacterCard'
 import { Button } from '@/components/ui/button' // 삭제 UI에 사용될 수 있으므로 import 유지
-import { useToast } from '@/components/ui/use-toast' // useToast import
+import { useToast } from '@/components/ui/use-toast' // Shadcn UI useToast 임포트
 import { useAuthStore } from '@/lib/authStore' // accessToken을 가져오기 위해 import
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL; // API_BASE_URL 정의
@@ -44,28 +44,28 @@ export function MyPageClientContent({
   const [registeredCharacters, setRegisteredCharacters] = React.useState<CharacterSearchResult[]>(initialCharacters)
   const [isEditMode, setIsEditMode] = React.useState(false);
   const [selectedCharacters, setSelectedCharacters] = React.useState<Set<string>>(new Set());
-  const { toast } = useToast(); // toast 함수 가져오기
-  const { accessToken } = useAuthStore.getState(); // Zustand 스토어에서 직접 accessToken 가져오기
+  const { toast } = useToast(); // useToast 사용 복원
+  const { accessToken } = useAuthStore.getState();
 
-  // 토스트 메시지를 관리하기 위한 상태
+  // toastInfo 상태 및 관련 useEffect 복원
   const [toastInfo, setToastInfo] = React.useState<{ title: string, description: string, variant?: 'default' | 'destructive' } | null>(null);
+
+  React.useEffect(() => {
+    if (toastInfo) {
+      toast(toastInfo); 
+      setToastInfo(null);
+    }
+  }, [toastInfo, toast]);
 
   React.useEffect(() => {
     setRegisteredCharacters(initialCharacters);
   }, [initialCharacters]);
 
-  // toastInfo 상태가 변경되면 토스트를 띄움
-  React.useEffect(() => {
-    if (toastInfo) {
-      toast(toastInfo);
-      setToastInfo(null); // 토스트를 띄운 후 초기화
-    }
-  }, [toastInfo, toast]);
-
   const handleCharacterRegistered = (character: CharacterSearchResult) => {
     let isNewCharacter = false;
     setRegisteredCharacters(prev => {
       if (prev.some(c => c.serverId === character.serverId && c.characterId === character.characterId)) {
+        // toast.error('이미 등록된 캐릭터입니다.');
         setToastInfo({ title: '등록 오류', description: '이미 등록된 캐릭터입니다.', variant: 'destructive' });
         return prev; 
       }
@@ -74,6 +74,7 @@ export function MyPageClientContent({
     })
 
     if (isNewCharacter) {
+      // toast.success(`${character.characterName} 캐릭터가 등록되었습니다.`);
       setToastInfo({ title: '성공', description: `${character.characterName} 캐릭터가 등록되었습니다.` });
     }
   }
@@ -104,10 +105,12 @@ export function MyPageClientContent({
 
   const handleDeleteSelected = async () => {
     if (selectedCharacters.size === 0) {
+      // toast.error('삭제할 캐릭터를 선택해주세요.');
       setToastInfo({ title: '알림', description: '삭제할 캐릭터를 선택해주세요.', variant: 'destructive' });
       return;
     }
     if (!accessToken) {
+      // toast.error('인증 토큰이 없습니다. 다시 로그인해주세요.');
       setToastInfo({ title: '오류', description: '인증 토큰이 없습니다. 다시 로그인해주세요.', variant: 'destructive' });
       return;
     }
@@ -118,7 +121,7 @@ export function MyPageClientContent({
 
     for (const characterId of charactersToDelete) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/characters?characterId=${characterId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/my-page/characters/${characterId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -128,24 +131,27 @@ export function MyPageClientContent({
         if (response.ok) {
           successCount++;
         } else {
+          console.error(`Failed to delete character ${characterId}:`, response.status, await response.text());
           failCount++;
         }
       } catch (error) {
+        console.error(`Error deleting character ${characterId}:`, error);
         failCount++;
       }
     }
 
     if (successCount > 0) {
+      // toast.success(`${successCount}개 캐릭터가 삭제되었습니다.`);
       setToastInfo({ title: '삭제 완료', description: `${successCount}개 캐릭터가 삭제되었습니다.` });
       setRegisteredCharacters(prev => prev.filter(char => !charactersToDelete.includes(char.characterId)));
     }
     if (failCount > 0) {
-      // 삭제 성공 토스트가 있다면, 실패 토스트는 그것이 사라진 후에 뜨도록 약간의 딜레이를 줄 수 있으나, 여기서는 단순화
+      // toast.error(`${failCount}개 캐릭터 삭제 중 오류가 발생했습니다.`);
       setToastInfo({ title: '삭제 실패', description: `${failCount}개 캐릭터 삭제 중 오류가 발생했습니다.`, variant: 'destructive' });
     }
     
     setSelectedCharacters(new Set());
-    if (registeredCharacters.length - successCount === 0) {
+    if (registeredCharacters.length - successCount === 0 && registeredCharacters.length >0) {
         setIsEditMode(false);
     }
   };

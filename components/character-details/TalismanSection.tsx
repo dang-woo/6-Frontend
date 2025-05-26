@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { TalismansDTO, RuneDTO } from '@/types/dnf'
+import { useEffect, useState } from 'react'
 
 interface TalismanSectionProps {
   talismans: TalismansDTO[] | null
@@ -36,7 +37,56 @@ const getItemRarityVariant = (
   }
 }
 
+async function fetchItemImageUrlFromProxy(itemId: string): Promise<string | null> {
+  if (!itemId) return null
+  try {
+    const response = await fetch(`/api/neople/item-image/${itemId}`)
+    if (!response.ok) {
+      console.error(`Failed to fetch image URL for item ${itemId}: ${response.statusText}`)
+      const errorData = await response.json()
+      console.error('Error data from proxy:', errorData)
+      return null
+    }
+    const data = await response.json()
+    return data.imageUrl || null
+  } catch (error) {
+    console.error(`Error fetching image URL for item ${itemId} via proxy:`, error)
+    return null
+  }
+}
+
 export function TalismanSection ({ talismans }: TalismanSectionProps) {
+  const [talismanImageUrls, setTalismanImageUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (talismans) {
+      const fetchPromises = talismans.map(async (talismanInfo) => {
+        if (talismanInfo.talisman?.itemId) {
+          const talItemId = talismanInfo.talisman.itemId;
+          let finalUrl = '/images/placeholder.png';
+          if (talismanInfo.talisman.itemImage) {
+            finalUrl = talismanInfo.talisman.itemImage;
+          } else {
+            const proxyUrl = await fetchItemImageUrlFromProxy(talItemId);
+            if (proxyUrl) finalUrl = proxyUrl;
+          }
+          return { itemId: talItemId, url: finalUrl };
+        }
+        return null;
+      }).filter(p => p !== null) as Promise<{itemId: string, url: string}>[];
+
+      Promise.all(fetchPromises).then(results => {
+        const urls: Record<string, string> = {};
+        results.forEach(r => {
+          if (r.itemId && r.url) {
+            urls[r.itemId] = r.url;
+          }
+        });
+        setTalismanImageUrls(urls);
+      });
+    }
+  }, [talismans]);
+
   if (!talismans || talismans.length === 0) {
     return (
       <Card>
@@ -57,18 +107,27 @@ export function TalismanSection ({ talismans }: TalismanSectionProps) {
 
         const talisman = talismanInfo.talisman
         const runes = talismanInfo.runes
+        const talismanImgSrc = talisman.itemId ? (talismanImageUrls[talisman.itemId] || talisman.itemImage || '/images/placeholder.png') : '/images/placeholder.png';
 
         return (
           <Card key={talisman.itemId} className='overflow-hidden flex flex-col'>
             <CardHeader className='flex flex-row items-center gap-3 p-3 bg-muted/10'>
-              {talisman.itemImage && (
+              {talisman.itemId && (
                 <div className='relative w-12 h-12 flex-shrink-0'>
                   <Image
-                    src={talisman.itemImage}
+                    src={talismanImgSrc}
                     alt={talisman.itemName}
                     fill
                     sizes='48px'
                     className='rounded-md object-contain bg-gray-100 dark:bg-gray-800 p-0.5 border'
+                    onError={() => {
+                      if (talisman.itemImage && talisman.itemId && talismanImageUrls[talisman.itemId] !== '/images/placeholder.png') {
+                        fetchItemImageUrlFromProxy(talisman.itemId).then(url => {
+                          if (url) setTalismanImageUrls(prev => ({ ...prev, [talisman.itemId!]: url }))
+                          else setTalismanImageUrls(prev => ({ ...prev, [talisman.itemId!]: '/images/placeholder.png' }))
+                        })
+                      }
+                    }}
                   />
                 </div>
               )}
@@ -76,7 +135,6 @@ export function TalismanSection ({ talismans }: TalismanSectionProps) {
                 <CardTitle className='text-base font-semibold truncate' title={talisman.itemName}>
                   {talisman.itemName}
                 </CardTitle>
-                {/* API 응답에 탈리스만 자체의 등급 정보가 있다면 Badge로 표시합니다. 현재는 유니크로 간주. */}
                 <Badge variant={getItemRarityVariant('유니크')} className='mt-1 text-xs'>
                   유니크 탈리스만
                 </Badge>
@@ -85,26 +143,13 @@ export function TalismanSection ({ talismans }: TalismanSectionProps) {
             {runes && runes.length > 0 && (
               <CardContent className='p-3 flex-grow'>
                 <h4 className='text-sm font-medium text-muted-foreground mb-1.5'>장착 룬:</h4>
-                <div className='space-y-2'>
+                <div className='space-y-1.5'>
                   {runes.map((rune: RuneDTO) => (
-                    <div key={rune.itemId} className='flex items-center gap-2 p-1.5 border rounded-md bg-background/30'>
-                      {rune.itemImage && (
-                        <div className='relative w-8 h-8 flex-shrink-0'>
-                          <Image
-                            src={rune.itemImage}
-                            alt={rune.itemName}
-                            fill
-                            sizes='32px'
-                            className='rounded-sm object-contain bg-gray-100 dark:bg-gray-800 p-0.5 border'
-                          />
-                        </div>
-                      )}
+                    <div key={rune.itemId || rune.itemName} className='flex items-center p-1.5 border rounded-md bg-background/30'>
                       <div className='flex-1 min-w-0'>
                         <p className='text-xs font-medium truncate' title={rune.itemName}>
                           {rune.itemName}
                         </p>
-                        {/* API 응답에 룬의 등급 정보가 있다면 Badge로 표시합니다. 현재는 정보 없음. */}
-                        {/* 예: <Badge variant={getItemRarityVariant(rune.itemRarity)} className='text-xs'>{rune.itemRarity}</Badge> */}
                       </div>
                     </div>
                   ))}
