@@ -69,16 +69,11 @@ export function OverviewSection ({ character, serverId }: OverviewSectionProps) 
 
     setIsSubmitting(true);
     try {
-      const response = await fetchWrapper(`${API_BASE_URL}/api/my-page/characters`, {
+      const response = await fetchWrapper(`${API_BASE_URL}/api/characters`, {
         method: 'POST',
         body: JSON.stringify({ 
           serverId,
-          characterId: character.characterId,
           characterName: character.characterName,
-          jobGrowName: character.jobGrowName,
-          level: character.level,
-          fame: character.fame,
-          characterImageUrl: character.imageUrl // 대표 이미지 URL도 함께 저장 (백엔드 스키마에 따라 조절)
         }),
       });
 

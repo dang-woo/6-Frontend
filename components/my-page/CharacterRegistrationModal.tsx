@@ -104,7 +104,7 @@ export function CharacterRegistrationModal ({ isOpen, onCloseAction, onCharacter
           return;
         }
 
-        const response = await fetch(`${API_BASE_URL}/api/my-page/characters`, {
+        const response = await fetch(`${API_BASE_URL}/api/characters`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -112,12 +112,7 @@ export function CharacterRegistrationModal ({ isOpen, onCloseAction, onCharacter
           },
           body: JSON.stringify({
             serverId: selectedCharacter.serverId,
-            characterId: selectedCharacter.characterId,
-            characterName: selectedCharacter.characterName,
-            jobGrowName: selectedCharacter.jobGrowName,
-            level: selectedCharacter.level,
-            fame: selectedCharacter.fame,
-            characterImageUrl: selectedCharacter.imageUrl
+            characterName: selectedCharacter.characterName
           })
         });
 

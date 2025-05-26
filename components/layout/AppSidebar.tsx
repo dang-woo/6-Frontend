@@ -109,11 +109,13 @@ export function AppSidebar() {
     <Sidebar
       className={cn(
         "border-r border-border/40 dark:border-neutral-800",
-        "overflow-y-auto overflow-x-hidden h-full flex flex-col",
+        "fixed top-16 z-30",
+        "h-[calc(100vh-4rem)]",
+        "overflow-y-auto overflow-x-hidden flex flex-col",
         "transition-all duration-300 ease-in-out",
         isMobile
-          ? 'fixed inset-y-0 left-0 z-50 w-[270px] bg-background shadow-xl transform'
-          : (isSidebarOpen ? 'w-[240px]' : 'w-16'),
+          ? 'left-0 w-[270px] bg-background shadow-xl transform'
+          : (isSidebarOpen ? 'w-[240px]' : 'w-[64px]'),
         isMobile && !isSidebarOpen && '-translate-x-full opacity-0',
         !isMobile && !isSidebarOpen && 'p-0',
       )}

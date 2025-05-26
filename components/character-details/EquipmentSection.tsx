@@ -9,7 +9,7 @@ import { EquipmentDTO, EnchantDTO, FusionOptionDTO, StatusDetailDTO } from '@/ty
 import { useEffect, useState } from 'react'
 
 interface EquipmentSectionProps {
-  equipment: EquipmentDTO[] | undefined
+  data: any; // 실제로는 DFCharacterResponseDTO['equipment'] 와 같은 구체적인 타입 사용 권장
 }
 
 // getItemRarityVariant (공통 유틸로 분리 권장)
@@ -93,12 +93,12 @@ function renderFusionOption(fusionOption: FusionOptionDTO | undefined | null) {
 // renderTuneDetails 함수 사용 X -> 제거
 // function renderTuneDetails(tune: TuneDTO[] | undefined | null) { ... }
 
-export function EquipmentSection({ equipment }: EquipmentSectionProps) {
+export function EquipmentSection({ data }: EquipmentSectionProps) {
   const [equipmentImageUrls, setEquipmentImageUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (equipment) {
-      const fetchPromises = equipment.map(async (item) => {
+    if (data) {
+      const fetchPromises = data.map(async (item: any) => {
         if (item.itemId) {
           let finalUrl = '/images/placeholder.png'; // 기본 플레이스홀더
           if (item.itemImage) {
@@ -110,7 +110,7 @@ export function EquipmentSection({ equipment }: EquipmentSectionProps) {
           return { itemId: item.itemId, url: finalUrl };
         }
         return null; 
-      }).filter(p => p !== null) as Promise<{itemId: string, url: string}>[];
+      }).filter((p: {itemId: string, url: string} | null) => p !== null) as Promise<{itemId: string, url: string}>[];
 
       Promise.all(fetchPromises).then(results => {
         const urls: Record<string, string> = {};
@@ -122,9 +122,9 @@ export function EquipmentSection({ equipment }: EquipmentSectionProps) {
         setEquipmentImageUrls(urls);
       });
     }
-  }, [equipment]);
+  }, [data]);
 
-  if (!equipment || equipment.length === 0) {
+  if (!data) {
     return (
       <Card>
         <CardHeader>
@@ -141,7 +141,7 @@ export function EquipmentSection({ equipment }: EquipmentSectionProps) {
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold tracking-tight mb-4">장착 장비</h2>
       <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-        {equipment.map((equip) => {
+        {data.map((equip: any) => {
           const itemImgSrc = equip.itemId ? (equipmentImageUrls[equip.itemId] || equip.itemImage || '/images/placeholder.png') : (equip.itemImage || '/images/placeholder.png');
 
           return (

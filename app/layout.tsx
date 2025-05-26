@@ -41,7 +41,6 @@ export default function RootLayout({ children }: RootLayoutProps) {
             {children}
             <Toaster />
           </ToastProvider>
-          {/* <HotToaster position="top-right" /> */}
         </ThemeProvider>
       </body>
     </html>

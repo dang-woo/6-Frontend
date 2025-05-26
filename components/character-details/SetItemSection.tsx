@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import type { SetItemInfoDTO, StatusDetailDTO } from '@/types/dnf'
 
 interface SetItemSectionProps {
-  setItemInfo: SetItemInfoDTO[] | null
+  data: SetItemInfoDTO[] | null | undefined;
 }
 
 const getItemRarityVariant = (
@@ -36,71 +36,78 @@ const getItemRarityVariant = (
   }
 }
 
-export function SetItemSection ({ setItemInfo }: SetItemSectionProps) {
-  if (!setItemInfo || setItemInfo.length === 0) {
+export function SetItemSection ({ data }: SetItemSectionProps) {
+  if (!data || data.length === 0) {
     return (
-      <Card className='text-center'>
+      <Card>
         <CardHeader>
           <CardTitle>세트 아이템 효과</CardTitle>
         </CardHeader>
         <CardContent>
-          <p>적용 중인 세트 아이템 효과가 없습니다.</p>
+          <p className="text-center py-4 text-gray-500 dark:text-gray-400">적용 중인 세트 아이템 효과가 없습니다.</p>
         </CardContent>
       </Card>
     )
   }
 
   return (
-    <div className='space-y-6 text-center'>
-      {setItemInfo.map((set, index) => (
-        <Card key={set.setItemName || index} className='overflow-hidden shadow-lg w-full  mx-auto'>
-          <CardHeader className='bg-muted/20 p-4 text-center'>
-            <CardTitle className='text-xl font-bold text-center'>{set.setItemName}</CardTitle>
-            <Badge 
-              variant={getItemRarityVariant(set.setItemRarityName)} 
-              className='mt-2 text-sm w-fit mx-auto'
-            >
-              {set.setItemRarityName} 세트
-            </Badge>
-          </CardHeader>
-          {set.active && (
-            <CardContent className='p-4 text-sm text-center'>
-              {set.active.explain && (
-                <div className='mb-3'>
-                  <h4 className='font-semibold text-muted-foreground mb-1'>세트 효과 설명:</h4>
-                  <p className='whitespace-pre-line text-gray-700 dark:text-gray-300'>{set.active.explain}</p>
+    <Card>
+      <CardHeader>
+        <CardTitle>세트 아이템 효과</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-4">
+          {data.map((set, index) => (
+            <li key={set.setItemName || `set-${index}`} className="border rounded-lg shadow-sm overflow-hidden bg-white dark:bg-slate-800">
+              <div className="p-4 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                <h4 className='text-lg font-semibold text-slate-800 dark:text-slate-100' title={set.setItemName}>{set.setItemName}</h4>
+                <Badge 
+                  variant={getItemRarityVariant(set.setItemRarityName)} 
+                  className='mt-1 text-xs'
+                >
+                  {set.setItemRarityName} 세트
+                </Badge>
+              </div>
+              {set.active && (
+                <div className='p-4 text-sm space-y-3'>
+                  {set.active.explain && (
+                    <div>
+                      <h5 className='font-medium text-slate-600 dark:text-slate-300 mb-0.5'>효과 설명:</h5>
+                      <p className='whitespace-pre-line text-slate-700 dark:text-slate-200 text-xs leading-relaxed'>{set.active.explain}</p>
+                    </div>
+                  )}
+                  {set.active.buffExplain && (
+                    <div>
+                      <h5 className='font-medium text-slate-600 dark:text-slate-300 mb-0.5'>버프 효과:</h5>
+                      <p className='whitespace-pre-line text-slate-700 dark:text-slate-200 text-xs leading-relaxed'>{set.active.buffExplain}</p>
+                    </div>
+                  )}
+                  {set.active.status && set.active.status.length > 0 && (
+                    <div>
+                      <h5 className='font-medium text-slate-600 dark:text-slate-300 mb-0.5'>추가 스탯:</h5>
+                      <ul className='list-disc list-inside space-y-0.5 pl-1 text-xs'>
+                        {set.active.status.map((stat: StatusDetailDTO, i: number) => (
+                          <li key={i} className='text-slate-700 dark:text-slate-200'>
+                            {stat.name}: <span className='font-semibold'>{String(stat.value)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {set.active.setPoint && (
+                    <div>
+                      <h5 className='font-medium text-slate-600 dark:text-slate-300 mb-0.5'>세트 포인트:</h5>
+                      <p className='text-slate-700 dark:text-slate-200 text-xs'>
+                        현재 <span className='font-semibold'>{set.active.setPoint.current}</span> / 최소 {set.active.setPoint.min} / 최대 {set.active.setPoint.max}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
-              {set.active.buffExplain && (
-                <div className='mb-3'>
-                  <h4 className='font-semibold text-muted-foreground mb-1'>버프 효과 설명:</h4>
-                  <p className='whitespace-pre-line text-gray-700 dark:text-gray-300'>{set.active.buffExplain}</p>
-                </div>
-              )}
-              {set.active.status && set.active.status.length > 0 && (
-                <div className='mb-3'>
-                  <h4 className='font-semibold text-muted-foreground mb-1'>추가 스탯:</h4>
-                  <ul className='list-disc list-inside space-y-0.5 pl-2 inline-block text-left'>
-                    {set.active.status.map((stat: StatusDetailDTO, i: number) => (
-                      <li key={i} className='text-gray-700 dark:text-gray-300'>
-                        {stat.name}: <span className='font-semibold'>{stat.value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {set.active.setPoint && (
-                <div>
-                  <h4 className='font-semibold text-muted-foreground mb-1'>세트 포인트:</h4>
-                  <p className='text-gray-700 dark:text-gray-300'>
-                    현재 <span className='font-semibold'>{set.active.setPoint.current}</span> / 최소 <span className='font-semibold'>{set.active.setPoint.min}</span> / 최대 <span className='font-semibold'>{set.active.setPoint.max}</span>
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
-      ))}
-    </div>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   )
 } 

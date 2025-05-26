@@ -7,7 +7,11 @@ import { Bot, X } from 'lucide-react'
 import { ChatWindow } from './ChatWindow'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
-export function FloatingChatButton() {
+interface FloatingChatButtonProps {
+  characterId: string;
+}
+
+export function FloatingChatButton({ characterId }: FloatingChatButtonProps) {
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
 
@@ -78,7 +82,7 @@ export function FloatingChatButton() {
         </Button>
       )}
       
-      {isChatOpen && <ChatWindow onClose={toggleChatWindow} />}
+      {isChatOpen && <ChatWindow characterId={characterId} onClose={toggleChatWindow} />}
     </>
   )
 } 

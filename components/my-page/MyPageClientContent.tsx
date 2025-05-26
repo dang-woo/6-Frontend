@@ -9,7 +9,6 @@ import type { CharacterSearchResult, ServerOption } from '@/types/dnf'
 import { CharacterCard } from '@/components/search/CharacterCard'
 import { Button } from '@/components/ui/button' // 삭제 UI에 사용될 수 있으므로 import 유지
 import { useToast } from '@/components/ui/use-toast' // Shadcn UI useToast 임포트
-import { useAuthStore } from '@/lib/authStore' // accessToken을 가져오기 위해 import
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL; // API_BASE_URL 정의
 
@@ -45,14 +44,11 @@ export function MyPageClientContent({
   const [isEditMode, setIsEditMode] = React.useState(false);
   const [selectedCharacters, setSelectedCharacters] = React.useState<Set<string>>(new Set());
   const { toast } = useToast(); // useToast 사용 복원
-  const { accessToken } = useAuthStore.getState();
-
-  // toastInfo 상태 및 관련 useEffect 복원
   const [toastInfo, setToastInfo] = React.useState<{ title: string, description: string, variant?: 'default' | 'destructive' } | null>(null);
 
   React.useEffect(() => {
     if (toastInfo) {
-      toast(toastInfo); 
+      toast(toastInfo);
       setToastInfo(null);
     }
   }, [toastInfo, toast]);
@@ -61,22 +57,23 @@ export function MyPageClientContent({
     setRegisteredCharacters(initialCharacters);
   }, [initialCharacters]);
 
-  const handleCharacterRegistered = (character: CharacterSearchResult) => {
-    let isNewCharacter = false;
+  const handleCharacterRegistered = (characterFromModal: CharacterSearchResult) => {
+    // 모달에서 이미 서버 등록 및 중복 체크를 완료했다고 가정합니다.
+    // 따라서 여기서는 전달받은 캐릭터를 기존 목록에 추가하기만 합니다.
+    // 단, 만약을 위해 클라이언트 측에서 한번 더 중복을 확인할 수는 있습니다.
     setRegisteredCharacters(prev => {
-      if (prev.some(c => c.serverId === character.serverId && c.characterId === character.characterId)) {
-        // toast.error('이미 등록된 캐릭터입니다.');
-        setToastInfo({ title: '등록 오류', description: '이미 등록된 캐릭터입니다.', variant: 'destructive' });
+      if (prev.some(c => c.serverId === characterFromModal.serverId && c.characterId === characterFromModal.characterId)) {
+        // 이 경우는 모달에서 중복을 걸렀음에도 발생하는 경우이므로, 로직 점검이 필요할 수 있습니다.
+        // 일반적으로 모달에서 성공 콜백이 왔다면 중복이 아니어야 합니다.
+        // console.warn('Modal에서 등록 성공했으나, MyPageClientContent에서 중복으로 감지됨');
+        // setToastInfo({ title: '정보', description: '이미 목록에 있는 캐릭터입니다.', variant: 'default' });
         return prev; 
       }
-      isNewCharacter = true;
-      return [...prev, character];
-    })
-
-    if (isNewCharacter) {
-      // toast.success(`${character.characterName} 캐릭터가 등록되었습니다.`);
-      setToastInfo({ title: '성공', description: `${character.characterName} 캐릭터가 등록되었습니다.` });
-    }
+      // 모달에서 성공 토스트를 이미 띄웠으므로 여기서는 추가 토스트 X
+      // 만약 부모에서도 띄우고 싶다면 setToastInfo 사용
+      return [...prev, characterFromModal];
+    });
+    // closeModal은 CharacterRegistrationModal 내부에서 처리합니다.
   }
 
   const hasAdventurers = registeredCharacters.length > 0
@@ -104,14 +101,10 @@ export function MyPageClientContent({
   };
 
   const handleDeleteSelected = async () => {
+    const accessToken = localStorage.getItem('accessToken'); // localStorage에서 직접 가져오기
+
     if (selectedCharacters.size === 0) {
-      // toast.error('삭제할 캐릭터를 선택해주세요.');
       setToastInfo({ title: '알림', description: '삭제할 캐릭터를 선택해주세요.', variant: 'destructive' });
-      return;
-    }
-    if (!accessToken) {
-      // toast.error('인증 토큰이 없습니다. 다시 로그인해주세요.');
-      setToastInfo({ title: '오류', description: '인증 토큰이 없습니다. 다시 로그인해주세요.', variant: 'destructive' });
       return;
     }
 
@@ -121,10 +114,10 @@ export function MyPageClientContent({
 
     for (const characterId of charactersToDelete) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/my-page/characters/${characterId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/characters?characterId=${characterId}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            'Authorization': `Bearer ${accessToken}`, // 여기서 업데이트된 accessToken 사용
           },
         });
 
@@ -141,12 +134,10 @@ export function MyPageClientContent({
     }
 
     if (successCount > 0) {
-      // toast.success(`${successCount}개 캐릭터가 삭제되었습니다.`);
       setToastInfo({ title: '삭제 완료', description: `${successCount}개 캐릭터가 삭제되었습니다.` });
       setRegisteredCharacters(prev => prev.filter(char => !charactersToDelete.includes(char.characterId)));
     }
     if (failCount > 0) {
-      // toast.error(`${failCount}개 캐릭터 삭제 중 오류가 발생했습니다.`);
       setToastInfo({ title: '삭제 실패', description: `${failCount}개 캐릭터 삭제 중 오류가 발생했습니다.`, variant: 'destructive' });
     }
     
@@ -247,4 +238,4 @@ export function MyPageClientContent({
       />
     </div>
   )
-} 
+}
