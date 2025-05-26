@@ -22,6 +22,12 @@ const nextConfig = {
       },
     ],
   },
+  experimental: {
+    allowedDevOrigins: ['http://localhost:3000', 'http://210.99.35.145'],
+  },
+  webpack: (config) => {
+    return config
+  },
 }
 
 export default nextConfig
