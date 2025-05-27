@@ -138,7 +138,8 @@ export function AvatarSection({ data }: AvatarSectionProps) {
         <CardTitle>아바타</CardTitle>
       </CardHeader>
       <CardContent>
-        <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 lg:grid-cols-3">
+        {/* 모바일: 1열, sm 이상: 2열. space-y-3 제거하고 gap-4로 간격 통일 */}
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {sortedAvatar.map((avatarItem) => {
             const itemImgSrc = avatarItem.itemId ? (avatarImageUrls[avatarItem.itemId] || avatarItem.itemImage || '/images/placeholder.png') : (avatarItem.itemImage || '/images/placeholder.png');
             const key = `${avatarItem.slotName}-${avatarItem.itemName}-${avatarItem.itemId || 'no-id'}`;

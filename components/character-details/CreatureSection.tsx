@@ -47,51 +47,39 @@ async function fetchItemImageUrlFromProxy(itemId: string): Promise<string | null
 }
 
 export function CreatureSection({ data }: CreatureSectionProps) {
-  const [creatureImageUrl, setCreatureImageUrl] = useState<string>('/images/placeholder.png')
-  const [artifactImageUrls, setArtifactImageUrls] = useState<Record<string, string>>({})
+  // console.log('CreatureSection data:', data); // 디버깅 시 사용
+
+  const [activeCreatureImageUrl, setActiveCreatureImageUrl] = useState<string | null>(null);
+  const [artifactImageUrls, setArtifactImageUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (data?.itemId) {
-      if (data.itemImage) {
-        setCreatureImageUrl(data.itemImage)
-      } else {
-        fetchItemImageUrlFromProxy(data.itemId).then(url => {
-          if (url) setCreatureImageUrl(url)
-          else setCreatureImageUrl('/images/placeholder.png')
-        })
-      }
+      fetchItemImageUrlFromProxy(data.itemId)
+        .then(url => setActiveCreatureImageUrl(url || data?.itemImage || '/images/placeholder.png'));
     }
-
     if (data?.artifact) {
-      const fetchPromises = data.artifact.map(async (art) => {
-        if (art.itemId) {
-          let finalUrl = '/images/placeholder.png'
-          if (art.itemImage) {
-            finalUrl = art.itemImage
-          } else {
-            const proxyUrl = await fetchItemImageUrlFromProxy(art.itemId)
-            if (proxyUrl) finalUrl = proxyUrl
-          }
-          return { itemId: art.itemId, url: finalUrl }
+      const fetchPromises = data.artifact.map(async (artifact) => {
+        if (artifact.itemId) {
+          const url = await fetchItemImageUrlFromProxy(artifact.itemId);
+          return { itemId: artifact.itemId, url: url || artifact.itemImage || '/images/placeholder.png' };
         }
-        return { itemId: art.itemId || `no-id-${Math.random()}`, url: '/images/placeholder.png' }
-      })
-
-      Promise.all(fetchPromises).then(results => {
-        const urls: Record<string, string> = {}
-        results.forEach(r => {
-          if (r.itemId && r.url) {
-            urls[r.itemId] = r.url
-          }
-        })
-        setArtifactImageUrls(urls)
-      })
+        return null;
+      });
+      Promise.all(fetchPromises.filter(p => p !== null) as Promise<{itemId: string, url: string}>[])
+        .then(results => {
+          const urls = results.reduce((acc, current) => {
+            if (current) acc[current.itemId] = current.url;
+            return acc;
+          }, {} as Record<string, string>);
+          setArtifactImageUrls(urls);
+        });
     }
-  }, [data])
+  }, [data]);
 
+  // 데이터가 없거나, creature 정보가 없는 경우 "정보 없음" 메시지 표시
   if (!data) {
     return (
-      <Card>
+      <Card> {/* Card 컴포넌트로 감싸기 */}
         <CardHeader>
           <CardTitle>크리쳐</CardTitle>
         </CardHeader>
@@ -102,23 +90,30 @@ export function CreatureSection({ data }: CreatureSectionProps) {
     );
   }
 
+  const artifact = data.artifact;
+  const activeCreatureImgSrc = activeCreatureImageUrl || data.itemImage || '/images/placeholder.png';
+
   return (
-    <div className="space-y-6">
-      <Card className="overflow-hidden">
-        <CardContent className="p-6">
+    <Card> {/* Card 컴포넌트로 감싸기 */}
+      <CardHeader>
+        <CardTitle>크리쳐</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* 활성화된 크리쳐 정보 */}
+        <div className="border rounded-lg p-4 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex flex-col sm:flex-row items-start gap-4">
             <div className="relative w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 bg-gray-100 dark:bg-slate-700 rounded-md flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-600">
               <Image
-                src={creatureImageUrl}
+                src={activeCreatureImgSrc}
                 alt={data.itemName || '크리쳐'}
                 fill
                 sizes='(max-width: 640px) 96px, 128px'
                 className='object-contain p-1'
                 onError={() => {
-                  if (data.itemImage && data.itemId && creatureImageUrl !== '/images/placeholder.png') {
+                  if (data.itemImage && data.itemId && activeCreatureImageUrl !== '/images/placeholder.png') {
                     fetchItemImageUrlFromProxy(data.itemId).then(url => {
-                      if (url) setCreatureImageUrl(url)
-                      else setCreatureImageUrl('/images/placeholder.png')
+                      if (url) setActiveCreatureImageUrl(url)
+                      else setActiveCreatureImageUrl('/images/placeholder.png')
                     })
                   }
                 }}
@@ -134,66 +129,68 @@ export function CreatureSection({ data }: CreatureSectionProps) {
               </Badge>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {data.artifact && data.artifact.length > 0 && (
-        <div>
-          <h3 className="text-xl font-semibold tracking-tight mb-3">아티팩트</h3>
-          <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 lg:grid-cols-3">
-            {data.artifact.map((artifact: ArtifactDTO, index: number) => {
-              const artifactKey = artifact.itemId || `artifact-${index}`;
-              const artifactDefaultImgSrc = artifact.itemImage || '/images/placeholder.png'
-              const artifactImgToDisplay = artifact.itemId ? (artifactImageUrls[artifact.itemId] || artifactDefaultImgSrc) : artifactDefaultImgSrc
-
-              return (
-                <li key={artifactKey} className="border rounded-lg p-3 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow flex flex-col">
-                  <div className="flex items-start gap-3 flex-grow">
-                    <div className="relative w-12 h-12 flex-shrink-0 mt-1 bg-gray-100 dark:bg-slate-700 rounded-md flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-600">
-                      <Image
-                        src={artifactImgToDisplay} 
-                        alt={artifact.itemName}
-                        width={48}
-                        height={48}
-                        className='object-contain p-0.5'
-                        onError={() => {
-                          if (artifact.itemImage && artifact.itemId && artifactImageUrls[artifact.itemId] !== '/images/placeholder.png') {
-                            fetchItemImageUrlFromProxy(artifact.itemId).then(url => {
-                              if (url) {
-                                setArtifactImageUrls(prev => ({ ...prev, [artifact.itemId!]: url }))
-                              } else {
-                                setArtifactImageUrls(prev => ({ ...prev, [artifact.itemId!]: '/images/placeholder.png' }))
-                              }
-                            })
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <div>
-                        <h4 className="text-md font-semibold truncate" title={artifact.itemName}> 
-                          {artifact.itemName}
-                        </h4>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                          <Badge
-                            variant={getItemRarityVariant(artifact.itemRarity)}
-                            className='text-[10px] px-1 py-0 font-normal h-auto align-middle'
-                          >
-                            {artifact.itemRarity}
-                          </Badge>
-                        </div>
-                      </div>
-                      {artifact.itemAvailableLevel != null && (
-                        <p className="text-xs text-muted-foreground mt-1">레벨제한: {artifact.itemAvailableLevel}</p>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
         </div>
-      )}
-    </div>
+
+        {/* 아티팩트 정보 */}
+        {artifact && artifact.length > 0 && (
+          <div>
+            <h3 className="text-lg font-medium mb-3 text-gray-700 dark:text-gray-200">아티팩트</h3>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {artifact.map((art) => {
+                const artifactKey = art.itemId || `artifact-${Math.random()}`;
+                const artifactDefaultImgSrc = art.itemImage || '/images/placeholder.png'
+                const artifactImgToDisplay = art.itemId ? (artifactImageUrls[art.itemId] || artifactDefaultImgSrc) : artifactDefaultImgSrc
+
+                return (
+                  <li key={artifactKey} className="border rounded-lg p-3 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow flex flex-col">
+                    <div className="flex items-start gap-3 flex-grow">
+                      <div className="relative w-12 h-12 flex-shrink-0 mt-1 bg-gray-100 dark:bg-slate-700 rounded-md flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-600">
+                        <Image
+                          src={artifactImgToDisplay} 
+                          alt={art.itemName}
+                          width={48}
+                          height={48}
+                          className='object-contain p-0.5'
+                          onError={() => {
+                            if (art.itemImage && art.itemId && artifactImageUrls[art.itemId] !== '/images/placeholder.png') {
+                              fetchItemImageUrlFromProxy(art.itemId).then(url => {
+                                if (url) {
+                                  setArtifactImageUrls(prev => ({ ...prev, [art.itemId!]: url }))
+                                } else {
+                                  setArtifactImageUrls(prev => ({ ...prev, [art.itemId!]: '/images/placeholder.png' }))
+                                }
+                              })
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 flex flex-col">
+                        <div>
+                          <h4 className="text-md font-semibold truncate" title={art.itemName}> 
+                            {art.itemName}
+                          </h4>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                            <Badge
+                              variant={getItemRarityVariant(art.itemRarity)}
+                              className='text-[10px] px-1 py-0 font-normal h-auto align-middle'
+                            >
+                              {art.itemRarity}
+                            </Badge>
+                          </div>
+                        </div>
+                        {art.itemAvailableLevel != null && (
+                          <p className="text-xs text-muted-foreground mt-1">레벨제한: {art.itemAvailableLevel}</p>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
+        {/* <pre>{JSON.stringify(data, null, 2)}</pre> */}
+      </CardContent>
+    </Card>
   );
 } 

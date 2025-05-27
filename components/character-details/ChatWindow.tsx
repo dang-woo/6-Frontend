@@ -87,9 +87,6 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
         headers, 
       });
 
-      // 이전 로딩 메시지 제거
-      setMessages(prev => prev.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID));
-
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           // TODO: 좀 더 나은 UI/UX (토스트, 모달 등) 및 로그아웃 처리 또는 로그인 페이지 이동 유도
@@ -102,34 +99,53 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
           }]);
         } else {
           console.error('AI 채팅 API 호출 실패:', response.statusText);
+          const errorData = await response.json().catch(() => ({})); // 오류 응답 파싱 시도
+          const errorMessage = errorData?.error || errorData?.message || '죄송합니다, 메시지 처리에 실패했습니다. 다시 시도해주세요.';
           const errorResponse: Message = {
             id: Date.now().toString() + '-error',
-            text: '죄송합니다, 메시지 처리에 실패했습니다. 다시 시도해주세요.',
+            text: errorMessage,
             sender: 'ai',
             timestamp: new Date()
           }
           setMessages(prevMessages => [...prevMessages, errorResponse]);
         }
-        setIsLoading(false);
         return;
       }
 
-      const data = await response.json();
+      const data = await response.json(); // data is ResponseAIDTO
 
-      if (data.response && data.response.answer) {
+      if (data.answer) { // AI의 답변이 있는 경우
         const aiResponseMessage: Message = {
           id: Date.now().toString() + '-ai',
-          text: data.response.answer,
+          text: data.answer,
           sender: 'ai',
           timestamp: new Date()
         }
-        setMessages(prevMessages => [...prevMessages, aiResponseMessage])
-        setAiResponseCount(prevCount => prevCount + 1)
-      } else if (data.message && data.message.includes('한도를 초과하였습니다')) {
-        // 백엔드에서 한도 초과로 초기화된 경우
+        setMessages(prevMessages => [...prevMessages, aiResponseMessage]);
+        setAiResponseCount(prevCount => prevCount + 1);
+
+        // 백엔드가 answer와 함께 한도 관련 message를 보낼 수도 있지만,
+        // 현재 DFController 로직 상으로는 answer가 있으면 한도 메시지는 별도로 처리하지 않는 것으로 보임.
+        // 만약 함께 온다면 아래와 같이 처리 가능
+        /*
+        if (data.message && data.message.includes('채팅창 한도에 도달했습니다')) {
+           const limitMessageText = data.message.includes('초기화됩니다') ? data.message : '채팅창 한도에 도달했습니다. 새로운 대화를 시작해주세요.';
+           const limitMessage: Message = {
+            id: Date.now().toString() + '-limit',
+            text: limitMessageText,
+            sender: 'ai',
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, limitMessage]);
+          if (data.message.includes('초기화됩니다')) {
+            setAiResponseCount(0);
+          }
+        }
+        */
+      } else if (data.message && data.message.includes('채팅창 한도에 도달했습니다')) { // 답변은 없고, 한도 초과 메시지만 있는 경우
         const resetMessage: Message = {
           id: Date.now().toString() + '-reset',
-          text: data.message,
+          text: data.message, // "채팅창 한도에 도달했습니다. 채팅 내역이 초기화됩니다."
           sender: 'ai',
           timestamp: new Date()
         }
@@ -139,12 +155,12 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
           sender: 'ai',
           timestamp: new Date()
         }])
-        setAiResponseCount(0) // AI 응답 횟수 초기화
+        setAiResponseCount(0); // 한도 초과로 초기화되었으므로 카운트 리셋
       } else {
-        // 예상치 못한 응답 형식
+        // AI 응답도 없고, 특정 한도 초과 메시지도 아닌 경우 (예: 다른 오류 메시지 또는 예상치 못한 응답)
         const unexpectedResponse: Message = {
           id: Date.now().toString() + '-ai-error',
-          text: 'AI 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.',
+          text: data.message || 'AI 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.',
           sender: 'ai',
           timestamp: new Date()
         }
@@ -153,7 +169,6 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
 
     } catch (error) {
       // TODO: 네트워크 오류 등 예외 처리
-      setMessages(prev => prev.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID)); // 에러 발생 시에도 로딩 메시지 제거
       console.error('AI 채팅 중 오류 발생:', error);
       const errorResponse: Message = {
         id: Date.now().toString() + '-exception',
@@ -162,8 +177,10 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
         timestamp: new Date()
       }
       setMessages(prevMessages => [...prevMessages, errorResponse]);
+    } finally {
+      setMessages(prev => prev.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID));
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }
 
   const handleClearChat = async () => {

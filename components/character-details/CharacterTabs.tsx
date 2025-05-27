@@ -47,7 +47,17 @@ export function CharacterTabs({ character }: CharacterTabsProps) {
 
       {tabItems.map((tab) => {
         const SectionComponent = tab.component as any; // 타입 단언
-        const sectionData = getSafeData(character, tab.dataKey);
+        
+        let sectionData;
+        if (tab.value === 'equipment') {
+          sectionData = {
+            equipment: getSafeData(character, 'equipment'),
+            setItemInfo: getSafeData(character, 'setItemInfo')
+          };
+        } else {
+          sectionData = getSafeData(character, tab.dataKey);
+        }
+        
         // console.log(`Rendering tab: ${tab.value}, dataKey: ${tab.dataKey}, sectionData:`, sectionData); // 데이터 확인용 로그
         return (
           <TabsContent key={tab.value} value={tab.value}>

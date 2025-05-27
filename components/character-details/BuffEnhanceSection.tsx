@@ -114,6 +114,24 @@ export function BuffEnhanceSection ({ data }: BuffEnhanceSectionProps) {
                 <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 lg:grid-cols-3">
                   {equipment.map((item: BuffEquipmentDetailDTO, index: number) => {
                     const itemImageUrl = item.itemImage || (item.itemId ? getNeopleItemImageUrl(item.itemId) : '/images/placeholder.png');
+                    
+                    let itemNameColorClass = 'text-gray-800 dark:text-gray-100'; // 기본 색상
+                    if (item.itemRarity === '태초') {
+                      if (item.itemName.includes('흑아')) {
+                        itemNameColorClass = 'text-red-500 dark:text-red-400';
+                      } else {
+                        itemNameColorClass = 'text-blue-500 dark:text-blue-400';
+                      }
+                    } else if (item.itemRarity === '에픽') {
+                      itemNameColorClass = 'text-yellow-500 dark:text-yellow-400';
+                    } else if (item.itemRarity === '레전더리') {
+                      itemNameColorClass = 'text-orange-500 dark:text-orange-400';
+                    } else if (item.itemRarity === '유니크') {
+                      itemNameColorClass = 'text-pink-500 dark:text-pink-400';
+                    } else if (item.itemRarity === '레어') {
+                      itemNameColorClass = 'text-purple-500 dark:text-purple-400';
+                    }
+
                     return (
                       <li key={item.itemId || `equip-${index}`} className="border rounded-lg p-3 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow flex flex-col">
                         <div className="flex items-start gap-3 flex-grow">
@@ -128,7 +146,7 @@ export function BuffEnhanceSection ({ data }: BuffEnhanceSectionProps) {
                           </div>
                           <div className="flex-1 min-w-0 flex flex-col">
                             <div>
-                              <h4 className="text-md font-semibold truncate" title={item.itemName}>{item.itemName}</h4>
+                              <h4 className={`text-md font-semibold truncate ${itemNameColorClass}`} title={item.itemName}>{item.itemName}</h4>
                               <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center mt-0.5">
                                 <Badge variant={getItemRarityVariant(item.itemRarity)} className='text-[10px] px-1 py-0 font-normal h-auto align-middle'>{item.itemRarity}</Badge>
                                 {item.reinforce !== 0 && (

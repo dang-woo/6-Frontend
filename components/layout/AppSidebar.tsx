@@ -30,7 +30,6 @@ interface SidebarMenuItemConfig {
 const sidebarMenuItems: SidebarMenuItemConfig[] = [
   { href: '/', icon: HomeIcon, label: '홈' },
   { href: '/my-page', icon: UserCircleIcon, label: '마이페이지' },
-  { href: '/chat', icon: MessageSquareIcon, label: '채팅' },
 ]
 
 const sidebarFooterItems: SidebarMenuItemConfig[] = [

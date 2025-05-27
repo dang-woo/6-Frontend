@@ -5,11 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 // import { Separator } from '@/components/ui/separator' // 사용 X
 // DFCharacterResponseDTO 사용 X
-import { EquipmentDTO, EnchantDTO, FusionOptionDTO, StatusDetailDTO } from '@/types/dnf'
+import { EquipmentDTO, EnchantDTO, FusionOptionDTO, StatusDetailDTO, SetItemInfoDTO } from '@/types/dnf'
 import { useEffect, useState } from 'react'
 
+interface EquipmentData {
+  equipment: EquipmentDTO[];
+  setItemInfo?: any; // SetItemInfoDTO | null -> any로 임시 변경
+}
+
 interface EquipmentSectionProps {
-  data: any; // 실제로는 DFCharacterResponseDTO['equipment'] 와 같은 구체적인 타입 사용 권장
+  data: EquipmentData | null | undefined; 
 }
 
 // getItemRarityVariant (공통 유틸로 분리 권장)
@@ -97,8 +102,8 @@ export function EquipmentSection({ data }: EquipmentSectionProps) {
   const [equipmentImageUrls, setEquipmentImageUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (data) {
-      const fetchPromises = data.map(async (item: any) => {
+    if (data && data.equipment) {
+      const fetchPromises = data.equipment.map(async (item: EquipmentDTO) => {
         if (item.itemId) {
           let finalUrl = '/images/placeholder.png'; // 기본 플레이스홀더
           if (item.itemImage) {
@@ -110,12 +115,12 @@ export function EquipmentSection({ data }: EquipmentSectionProps) {
           return { itemId: item.itemId, url: finalUrl };
         }
         return null; 
-      }).filter((p: {itemId: string, url: string} | null) => p !== null) as Promise<{itemId: string, url: string}>[];
+      });
 
       Promise.all(fetchPromises).then(results => {
         const urls: Record<string, string> = {};
         results.forEach(r => {
-          if (r.itemId && r.url) {
+          if (r && r.itemId && r.url) {
             urls[r.itemId] = r.url;
           }
         });
@@ -124,78 +129,136 @@ export function EquipmentSection({ data }: EquipmentSectionProps) {
     }
   }, [data]);
 
-  if (!data) {
+  if (!data || !data.equipment || data.equipment.length === 0) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>장착 장비</CardTitle>
         </CardHeader>
         <CardContent>
-          <p>장착한 장비가 없습니다.</p>
+          <p className="text-center py-4 text-gray-500 dark:text-gray-400">장착된 장비 정보가 없습니다.</p>
         </CardContent>
       </Card>
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-semibold tracking-tight mb-4">장착 장비</h2>
-      <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-        {data.map((equip: any) => {
-          const itemImgSrc = equip.itemId ? (equipmentImageUrls[equip.itemId] || equip.itemImage || '/images/placeholder.png') : (equip.itemImage || '/images/placeholder.png');
+  const { equipment, setItemInfo } = data;
 
-          return (
-          <li key={equip.itemId || equip.itemName} className="border rounded-lg p-3 hover:bg-muted/50 transition-colors flex flex-col">
-            <div className="flex items-start gap-3 flex-grow">
-              <div className="relative w-12 h-12 flex-shrink-0 mt-1 bg-muted/20 rounded-md flex items-center justify-center overflow-hidden border">
-                {equip.itemId ? (
-                  <Image 
-                    src={itemImgSrc} 
-                    alt={equip.itemName} 
-                    fill 
-                    sizes="48px" 
-                    className="rounded-md bg-background object-contain"
-                    unoptimized 
-                    onError={() => {
-                      if (equip.itemImage && equip.itemId && equipmentImageUrls[equip.itemId] !== '/images/placeholder.png') {
-                        fetchItemImageUrlFromProxy(equip.itemId).then(url => {
-                          if (url) setEquipmentImageUrls(prev => ({ ...prev, [equip.itemId!]: url }))
-                          else setEquipmentImageUrls(prev => ({ ...prev, [equip.itemId!]: '/images/placeholder.png' }))
-                        })
-                      }
-                    }}
-                  />
-                ) : (
-                  <span className="text-xs text-muted-foreground">이미지 없음</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col">
-                <div>
-                  <div className="flex justify-between items-start">
-                    <h3 
-                      className={`text-md font-semibold ${equip.itemRarity === '태초' ? 'text-yellow-400' : equip.itemRarity === '에픽' ? 'text-pink-500' : equip.itemRarity === '레전더리' ? 'text-orange-500' : equip.itemRarity === '신화' ? 'text-purple-400' : 'text-foreground'}`}
-                      title={equip.itemName}
-                    >
-                      {equip.itemName}
-                    </h3>
-                    <Badge variant={equip.itemGradeName ? getItemRarityVariant(equip.itemRarity) : 'outline'} className="text-xs ml-2 whitespace-nowrap">{equip.itemGradeName || '등급 정보 없음'}</Badge>
+  // 슬롯 이름 순서 정의
+  const slotOrder: string[] = [
+    '무기',
+    '칭호',
+    '머리어깨',
+    '상의',
+    '하의',
+    '벨트',
+    '신발',
+    '팔찌',
+    '목걸이',
+    '반지',
+    '보조장비',
+    '마법석',
+    '귀걸이',
+    // 추가적인 슬롯이 있다면 여기에 추가
+  ];
+
+  const sortedEquipment = [...equipment].sort((a: EquipmentDTO, b: EquipmentDTO) => {
+    const indexA = slotOrder.indexOf(a.slotName);
+    const indexB = slotOrder.indexOf(b.slotName);
+    // 정의되지 않은 슬롯은 뒤로 정렬
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>장착 장비</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {sortedEquipment.map((item) => {
+            const itemImgSrc = item.itemId ? (equipmentImageUrls[item.itemId] || item.itemImage || '/images/placeholder.png') : (item.itemImage || '/images/placeholder.png');
+
+            return (
+              <li key={item.itemId || item.itemName} className="border rounded-lg p-3 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
+                <div className="flex items-start gap-3 flex-grow">
+                  <div className="relative w-12 h-12 flex-shrink-0 mt-1 bg-gray-100 dark:bg-slate-700 rounded-md flex items-center justify-center overflow-hidden border border-gray-200 dark:border-slate-600">
+                    {item.itemId ? (
+                      <Image 
+                        src={itemImgSrc} 
+                        alt={item.itemName} 
+                        width={48}
+                        height={48}
+                        className="object-contain p-0.5"
+                        unoptimized 
+                        onError={(e) => {
+                          e.currentTarget.src = '/images/placeholder.png'; 
+                          if (item.itemImage && item.itemId && equipmentImageUrls[item.itemId] !== '/images/placeholder.png') {
+                            fetchItemImageUrlFromProxy(item.itemId).then(url => {
+                              if (url) setEquipmentImageUrls(prev => ({ ...prev, [item.itemId!]: url }))
+                            })
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">이미지 없음</span>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground">{equip.slotName}</p>
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div>
+                      <h3 
+                        className={`text-md font-semibold truncate ${
+                          item.itemRarity === '태초'
+                            ? item.itemName.includes('흑아')
+                              ? 'text-red-500 dark:text-red-400'
+                              : 'text-blue-500 dark:text-blue-400'
+                            : item.itemRarity === '에픽'
+                              ? 'text-yellow-500 dark:text-yellow-400'
+                              : item.itemRarity === '레전더리'
+                                ? 'text-orange-500 dark:text-orange-400'
+                                : item.itemRarity === '유니크'
+                                  ? 'text-pink-500 dark:text-pink-400'
+                                  : item.itemRarity === '레어'
+                                    ? 'text-purple-500 dark:text-purple-400'
+                                    : 'text-gray-800 dark:text-gray-100' // 기본값
+                        } line-clamp-2`}
+                        title={item.itemName}
+                      >
+                        {item.itemName}
+                      </h3>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                        <span>{item.slotName}</span> 
+                        <Badge variant={item.itemGradeName ? getItemRarityVariant(item.itemRarity) : 'outline'} className="text-[10px] px-1 py-0 font-normal ml-1 h-auto align-middle">{item.itemGradeName || '정보 없음'}</Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-1 space-y-0.5 text-xs flex-grow">
+                      {item.reinforce && item.reinforce !== '0' && 
+                        <div>강화/증폭: <Badge variant="outline" className="px-1 py-0 font-normal">+{item.reinforce} {item.amplificationName || ''}</Badge></div>
+                      }
+                      {item.setItemName && <p className="truncate">세트: {item.setItemName}</p>}
+                      {renderEnchant(item.enchant)}
+                      {renderFusionOption(item.fusionOption)}
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="mt-1 space-y-0.5 text-xs flex-grow">
-                  {equip.reinforce && equip.reinforce !== '0' && 
-                    <div>강화/증폭: <Badge variant="outline" className="px-1 py-0 font-normal">+{equip.reinforce} {equip.amplificationName || ''}</Badge></div>
-                  }
-                  {equip.setItemName && <p className="truncate">세트: {equip.setItemName}</p>}
-                  {renderEnchant(equip.enchant)}
-                  {renderFusionOption(equip.fusionOption)}
-                </div>
-              </div>
-            </div>
-          </li>
-        )})}
-      </ul>
-    </div>
+              </li>
+            );
+          })}
+        </ul>
+        {setItemInfo && setItemInfo.setItemName && (
+          <div className="mt-6 p-4 bg-gray-50 dark:bg-slate-800 rounded-lg shadow">
+            <h4 className="font-semibold text-lg mb-2 text-orange-500">세트 효과: {setItemInfo.setItemName}</h4>
+            <ul className="space-y-1 text-sm">
+              {setItemInfo.activeSetNoOptions?.map((option: any, index: number) => (
+                <li key={index} className="text-gray-700 dark:text-gray-300">{option.optionText} (활성: {option.activeSetOptionCount})</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 } 
