@@ -1,6 +1,7 @@
 import { DFCharacterResponseDTO, CharacterRegist, CharacterSearchResult } from '@/types/dnf';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+console.log('[characterService] API_BASE_URL:', API_BASE_URL); // 환경 변수 값 확인
 
 export async function getCharacterDetails(serverId: string, characterId: string): Promise<DFCharacterResponseDTO | null> {
   if (!API_BASE_URL) {
@@ -25,7 +26,7 @@ export async function getCharacterDetails(serverId: string, characterId: string)
     }
     return await res.json();
   } catch (error) {
-    console.error(`[characterService] Network or other error fetching details for ${characterId} on server ${serverId}:`, error);
+    console.error(`[characterService] Network or other error fetching details for ${characterId} on server ${serverId}:`, error); // 오류 객체 전체 로깅
     return null;
   }
 }
@@ -157,7 +158,7 @@ export async function getMyPageCharacters(token: string): Promise<CharacterSearc
     if (error.message === 'AuthenticationError') {
       throw error; 
     }
-    console.error('[characterService] Error in main try-catch block for getMyPageCharacters:', error);
+    console.error('[characterService] Error in main try-catch block for getMyPageCharacters:', error); // 오류 객체 전체 로깅
     return []; 
   }
 } 

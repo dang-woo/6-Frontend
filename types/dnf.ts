@@ -163,7 +163,7 @@ export interface TalismanDetailDTO {
   itemImage: string;
   slotNo: number;
   itemName: string;
-  runeTypes: string[] | null; // 예시에서는 string 배열이었음
+  runeTypes: string[] | null;
 }
 
 export interface RuneDTO {
@@ -171,7 +171,6 @@ export interface RuneDTO {
   itemImage: string;
   slotNo: number;
   itemName: string;
-  // aa.txt 예시에는 없었지만, itemRarity가 있을 수 있음
 }
 
 // 스킬 (Skill)
@@ -285,4 +284,44 @@ export interface CharacterRegist {
   jobGrowName?: string;
   imageUrl?: string;
   // 필요시 다른 필드도 추가 가능
-} 
+}
+
+// --- 탈리스만 관련 DTO 재정의 시작 ---
+
+// 개별 룬 정보 (기존 RuneDTO 활용 또는 약간 수정)
+export interface RuneDTO {
+  itemId: string;
+  itemImage: string;
+  slotNo: number;
+  itemName: string;
+}
+
+// 개별 탈리스만 아이템의 상세 정보 (기존 TalismanDetailDTO 활용 또는 약간 수정)
+export interface TalismanItemDTO {
+  itemId: string;
+  itemName: string;
+  itemImage: string;
+}
+
+// API 응답 내의 'talismans' 배열의 각 요소 타입 (개별 탈리스만 슬롯 정보)
+export interface TalismanSlotInfo {
+  slotNo: number;
+  talisman: TalismanItemDTO | null;
+  runes: Array<RuneDTO | null>;
+}
+
+// Neople API /df/servers/{serverId}/characters/{characterId}/equip/talisman 의 루트 응답 DTO
+export interface NeopleTalismanApiResponseDTO {
+  serverId: string;
+  characterId: string;
+  characterName: string;
+  talismans: Array<TalismanSlotInfo | null>;
+}
+
+// --- 탈리스만 관련 DTO 재정의 끝 ---
+
+// 기존 TalismansDTO, TalismanDetailDTO는 위에서 재정의되거나 새로운 타입으로 대체되었으므로,
+// 혼동을 피하기 위해 주석 처리하거나 삭제하는 것을 고려할 수 있습니다.
+// 여기서는 DFCharacterResponseDTO와의 호환성을 위해 남겨두고, 새 타입을 우선 사용하도록 합니다.
+// DFCharacterResponseDTO의 talismans: TalismansDTO[] 부분도 실제 API 응답에 맞게 수정 필요.
+// 지금은 TalismanSection에서 사용할 타입만 우선적으로 정의합니다. 

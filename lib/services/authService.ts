@@ -1,4 +1,5 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+console.log('[authService] API_BASE_URL:', API_BASE_URL); // 환경 변수 값 확인
 
 // interface UserProfile { ... } // 이 인터페이스는 현재 사용되지 않으므로 제거 또는 주석 처리 가능
 
@@ -45,7 +46,7 @@ export async function getServerUserProfile(token: string): Promise<string | null
       return null;
     }
   } catch (error) {
-    console.error('[authService] Network or other error fetching user profile:', error);
+    console.error('[authService] Network or other error fetching user profile:', error); // 오류 객체 전체 로깅
     return null;
   }
 } 

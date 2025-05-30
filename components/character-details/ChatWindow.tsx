@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -26,18 +27,85 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
+// 텍스트 포매팅 함수 추가
+function formatMessageText(text: string): (string | React.JSX.Element)[] | string {
+  if (!text) return '';
+
+  const parts = text.split(/(\*{2}.+?\*{2})/g); // **text** 패턴으로 분리
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    // white-space: pre-wrap 이 이미 적용되어 있으므로,
+    // 명시적인 <br /> 태그 변환은 주석 처리합니다.
+    // 필요시 아래 로직을 활성화하고 React.Fragment 등을 사용하세요.
+    /*
+    const lines = part.split('\n');
+    return (
+      <span key={index}>
+        {lines.map((line, i) => (
+          <React.Fragment key={`line-${index}-${i}`}> 
+            {line}
+            {i < lines.length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </span>
+    );
+    */
+    return part; 
+  });
+}
+
 const AI_LOADING_MESSAGE_ID = 'ai-loading-message';
 
 export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: '안녕하세요! 무엇을 도와드릴까요?', sender: 'ai', timestamp: new Date() }
-  ])
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('')
   const [aiResponseCount, setAiResponseCount] = useState(0) // AI 응답 횟수 상태
   const [isLoading, setIsLoading] = useState(false); // 로딩 상태 추가
   const [isClearingChat, setIsClearingChat] = useState(false); // 채팅 초기화 로딩 상태
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+
+  // characterId가 변경될 때 localStorage에서 대화 기록 로드 및 초기 메시지 설정
+  useEffect(() => {
+    const storedMessages = localStorage.getItem(`chatHistory_${characterId}`);
+    if (storedMessages) {
+      try {
+        const parsedMessagesFromStorage = JSON.parse(storedMessages) as Message[];
+        const messagesWithDateObjects = parsedMessagesFromStorage.map(msg => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp) // 문자열을 Date 객체로 변환
+        }));
+        // isLoading 플래그가 true로 저장된 메시지가 있을 경우 제거 (예: 브라우저 강제 종료)
+        setMessages(messagesWithDateObjects.filter(msg => !msg.isLoading));
+      } catch (error) {
+        console.error('Error parsing stored messages from localStorage or converting timestamp:', error);
+        // 파싱 오류 시 기본 초기 메시지로 설정
+        setMessages([{ id: '1', text: '안녕하세요! 무엇을 도와드릴까요?', sender: 'ai', timestamp: new Date() }]);
+      }
+    } else {
+      setMessages([{ id: '1', text: '안녕하세요! 무엇을 도와드릴까요?', sender: 'ai', timestamp: new Date() }]);
+    }
+    // characterId가 바뀌면 AI 응답 횟수도 초기화되어야 할 수 있습니다. (정책에 따라 결정)
+    // setAiResponseCount(0); // 필요시 주석 해제
+  }, [characterId]);
+
+  // messages 상태가 변경될 때 localStorage에 저장 (AI 로딩 메시지 제외)
+  useEffect(() => {
+    // 초기 로드 시 messages가 빈 배열일 수 있으므로, 빈 배열 저장을 방지
+    if (messages.length > 0) {
+      const messagesToStore = messages.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID);
+      localStorage.setItem(`chatHistory_${characterId}`, JSON.stringify(messagesToStore));
+    } else {
+      // 메시지가 비어있다면 (예: 초기화 직후 아직 메시지 없는 상태) 로컬 스토리지에서도 해당 characterId의 기록을 지울 수 있습니다.
+      // 또는, 초기 메시지가 항상 있도록 하려면 이 로직은 필요 없습니다.
+      // 현재는 messages.length > 0 조건 때문에 빈 배열이 저장되는 것을 막고 있습니다.
+      // 만약 사용자가 모든 메시지를 지우고 창을 닫았다가 다시 열었을 때 빈 상태를 원한다면,
+      // 이 else 블록에서 localStorage.removeItem(`chatHistory_${characterId}`)를 호출할 수 있습니다.
+      // 하지만 현재는 첫 메시지가 항상 있도록 위에서 처리하고 있으므로, 여기서는 특별한 동작을 하지 않습니다.
+    }
+  }, [messages, characterId]);
 
   const handleSendMessage = async () => {
     if (inputValue.trim() === '' || isLoading) return // 로딩 중이면 전송 방지
@@ -209,6 +277,7 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
           { id: 'cleared', text: '채팅 내역이 초기화되었습니다.', sender: 'ai', timestamp: new Date() }
         ]);
         setAiResponseCount(0);
+        localStorage.removeItem(`chatHistory_${characterId}`); // localStorage에서도 삭제
         toast({ title: '채팅 초기화 완료', description: '채팅 내역이 성공적으로 삭제되었습니다.'});
       } else {
         const errorData = await response.json().catch(() => ({ message: '채팅 내역 삭제에 실패했습니다.'}));
@@ -240,8 +309,8 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
 
   return (
     <div className={`fixed bg-background border-border shadow-xl flex flex-col z-[100] 
-                    sm:w-full sm:max-w-sm sm:h-[70vh] sm:max-h-[800px] sm:rounded-lg sm:border sm:bottom-24 sm:right-8 
-                    inset-0 sm:inset-auto rounded-none border-0`}>
+                          sm:w-[1000px] sm:h-[83vh] sm:max-h-[1000px] sm:rounded-lg sm:border sm:bottom-24 sm:right-4 
+                          inset-0 sm:inset-auto rounded-none border-0`}>
       <div className="p-3 border-b flex justify-between items-center bg-muted/40">
         <h3 className="font-semibold text-lg">AI 채팅</h3>
         <div className="flex items-center">
@@ -258,24 +327,49 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
         {messages.map((msg) => (
           <div 
             key={msg.id} 
-            className={`flex flex-col items-start max-w-[85%] mb-4 ${msg.sender === 'user' ? 'ml-auto items-end' : 'mr-auto'}`}>
-            <div
-              className={`px-3 py-2 rounded-xl text-sm break-words 
-                ${msg.sender === 'user' 
-                  ? 'bg-primary text-primary-foreground' 
-                  : msg.isLoading // 로딩 메시지 스타일링 (선택적)
-                    ? 'bg-muted/50 text-muted-foreground italic' 
-                    : 'bg-muted'}`
-              }
-            >
-              {msg.text}
+            className={`flex mb-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`flex flex-col items-start max-w-[85%] ${msg.sender === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
+              {/* AI 메시지인 경우, 아이콘과 함께 표시 (간단한 예시) */} 
+              {msg.sender === 'ai' && !msg.isLoading && (
+                <div className="flex items-end gap-2">
+                  {/* 예시: 로봇 아이콘 또는 캐릭터 썸네일 등 */} 
+                  {/* <BotIcon className="w-6 h-6 rounded-full bg-primary text-primary-foreground p-1 mb-3" /> */}
+                  <div 
+                    className={`px-3 py-2 rounded-xl text-sm break-words 
+                      ${msg.isLoading 
+                        ? 'bg-muted/50 text-muted-foreground italic' 
+                        : 'bg-muted rounded-tl-none' // AI 메시지 왼쪽 상단 모서리 각지게 
+                      }`
+                    }
+                    style={{ whiteSpace: 'pre-wrap' }}
+                  >
+                    {formatMessageText(msg.text)}
+                  </div>
+                </div>
+              )}
+              {/* 사용자 메시지 또는 AI 로딩 메시지 */} 
+              {(msg.sender === 'user' || (msg.sender === 'ai' && msg.isLoading)) && (
+                <div
+                  className={`px-3 py-2 rounded-xl text-sm break-words 
+                    ${msg.sender === 'user' 
+                      ? 'bg-primary text-primary-foreground rounded-tr-none' // 사용자 메시지 오른쪽 상단 모서리 각지게 
+                      : msg.isLoading 
+                        ? 'bg-muted/50 text-muted-foreground italic' 
+                        : 'bg-muted' // AI 일반 메시지 (위에서 처리되지 않은 경우, 혹은 로딩 아닌 AI) - 이 경로는 거의 타지 않음
+                    }`
+                  }
+                  style={{ whiteSpace: msg.sender === 'ai' ? 'pre-wrap' : 'normal' }}
+                >
+                  {msg.sender === 'ai' ? formatMessageText(msg.text) : msg.text}
+                </div>
+              )}
+              {/* 시간 표시 (로딩 메시지에는 시간 표시 안 함) */} 
+              {!msg.isLoading && (
+                <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-muted-foreground/80' : 'text-muted-foreground/80 ml-1'}`}>
+                  {formatTime(msg.timestamp)}
+                </p>
+              )}
             </div>
-            {/* 시간 표시 (로딩 메시지에는 시간 표시 안 함) */}
-            {!msg.isLoading && (
-              <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-muted-foreground/80' : 'text-muted-foreground/80 ml-1'}`}>
-                {formatTime(msg.timestamp)}
-              </p>
-            )}
           </div>
         ))}
       </ScrollArea>
