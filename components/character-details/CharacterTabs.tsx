@@ -64,7 +64,16 @@ export function CharacterTabs({ character }: CharacterTabsProps) {
               />
             ) : (
               // dataKey가 null이나 undefined가 아닐 경우에만 getNestedData 호출
-              tab.dataKey ? <SectionComponent data={getNestedData(character, tab.dataKey)} /> : <SectionComponent />
+              tab.dataKey ? (
+                tab.value === 'equipment' ? (
+                  // EquipmentSection의 경우 equipment 배열을 포함하는 객체로 감싸서 전달
+                  <SectionComponent data={{ equipment: getNestedData(character, tab.dataKey) || [] }} />
+                ) : (
+                  <SectionComponent data={getNestedData(character, tab.dataKey)} />
+                )
+              ) : (
+                <SectionComponent />
+              )
             )}
           </TabsContent>
         );
