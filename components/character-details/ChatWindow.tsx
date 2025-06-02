@@ -300,110 +300,97 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
   useEffect(() => {
     // 새 메시지가 추가될 때 스크롤을 맨 아래로 이동
     if (scrollAreaRef.current) {
-      const scrollViewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollViewport) {
-        scrollViewport.scrollTop = scrollViewport.scrollHeight;
+      const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scrollarea-viewport]');
+      if (scrollElement) {
+        scrollElement.scrollTop = scrollElement.scrollHeight;
       }
     }
-  }, [messages])
+  }, [messages]);
 
   return (
-    <div className={`fixed bg-background border-border shadow-xl flex flex-col z-[100] 
-                          sm:w-[1000px] sm:h-[83vh] sm:max-h-[1000px] sm:rounded-lg sm:border sm:bottom-24 sm:right-4 
-                          inset-0 sm:inset-auto rounded-none border-0`}>
-      <div className="p-3 border-b flex justify-between items-center bg-muted/40">
-        <h3 className="font-semibold text-lg">AI 채팅</h3>
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" onClick={handleClearChat} aria-label="채팅 내역 초기화" disabled={isClearingChat || isLoading}>
-            {isClearingChat ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+    <div 
+      className={`
+        fixed z-[100] flex flex-col bg-background shadow-xl border
+        inset-0 sm:inset-auto 
+        sm:bottom-[calc(2rem+3.5rem+0.5rem)] sm:right-8 
+        sm:w-[380px] sm:h-[500px] 
+        sm:max-h-[calc(100vh-10rem)] 
+        sm:rounded-lg
+      `}
+    >
+      <div className="flex items-center justify-between p-3 border-b sticky top-0 bg-background z-10">
+        <h3 className="text-lg font-semibold">AI 캐릭터 상담</h3>
+        <div className="flex items-center gap-1">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleClearChat} 
+            disabled={isClearingChat || isLoading}
+            aria-label="대화 내용 전체 삭제"
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="챗창 닫기" disabled={isClearingChat}>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="채팅창 닫기" className="text-muted-foreground hover:text-foreground">
             <X className="h-5 w-5" />
           </Button>
         </div>
       </div>
 
-      <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
+      <ScrollArea ref={scrollAreaRef} className="flex-1 p-3 sm:p-4 space-y-3">
         {messages.map((msg) => (
-          <div 
-            key={msg.id} 
-            className={`flex mb-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`flex flex-col items-start max-w-[85%] ${msg.sender === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
-              {/* AI 메시지인 경우, 아이콘과 함께 표시 (간단한 예시) */} 
-              {msg.sender === 'ai' && !msg.isLoading && (
-                <div className="flex items-end gap-2">
-                  {/* 예시: 로봇 아이콘 또는 캐릭터 썸네일 등 */} 
-                  {/* <BotIcon className="w-6 h-6 rounded-full bg-primary text-primary-foreground p-1 mb-3" /> */}
-                  <div 
-                    className={`px-3 py-2 rounded-xl text-sm break-words 
-                      ${msg.isLoading 
-                        ? 'bg-muted/50 text-muted-foreground italic' 
-                        : 'bg-muted rounded-tl-none' // AI 메시지 왼쪽 상단 모서리 각지게 
-                      }`
-                    }
-                    style={{ whiteSpace: 'pre-wrap' }}
-                  >
-                    {formatMessageText(msg.text)}
-                  </div>
-                </div>
-              )}
-              {/* 사용자 메시지 또는 AI 로딩 메시지 */} 
-              {(msg.sender === 'user' || (msg.sender === 'ai' && msg.isLoading)) && (
-                <div
-                  className={`px-3 py-2 rounded-xl text-sm break-words 
-                    ${msg.sender === 'user' 
-                      ? 'bg-primary text-primary-foreground rounded-tr-none' // 사용자 메시지 오른쪽 상단 모서리 각지게 
-                      : msg.isLoading 
-                        ? 'bg-muted/50 text-muted-foreground italic' 
-                        : 'bg-muted' // AI 일반 메시지 (위에서 처리되지 않은 경우, 혹은 로딩 아닌 AI) - 이 경로는 거의 타지 않음
-                    }`
-                  }
-                  style={{ whiteSpace: msg.sender === 'ai' ? 'pre-wrap' : 'normal' }}
-                >
-                  {msg.sender === 'ai' ? formatMessageText(msg.text) : msg.text}
-                </div>
-              )}
-              {/* 시간 표시 (로딩 메시지에는 시간 표시 안 함) */} 
-              {!msg.isLoading && (
-                <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-muted-foreground/80' : 'text-muted-foreground/80 ml-1'}`}>
-                  {formatTime(msg.timestamp)}
-                </p>
-              )}
+          <div
+            key={msg.id}
+            className={`flex flex-col gap-1 ${
+              msg.sender === 'user' ? 'items-end' : 'items-start'
+            }`}
+          >
+            <div
+              className={`max-w-[85%] rounded-xl px-3 py-2 text-sm sm:text-base shadow ${
+                msg.sender === 'user'
+                  ? 'bg-primary text-primary-foreground self-end'
+                  : 'bg-muted text-muted-foreground self-start'
+              } ${msg.isLoading ? 'flex items-center' : ''}`}
+            >
+              {msg.isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              <div className="whitespace-pre-wrap break-words">
+                {formatMessageText(msg.text)}
+              </div>
             </div>
+            <span className="text-xs text-gray-400 px-1">
+              {formatTime(msg.timestamp)}
+            </span>
           </div>
         ))}
       </ScrollArea>
 
-      <div className="p-3 border-t bg-muted/20">
-        <form 
-          onSubmit={(e) => { 
-            e.preventDefault(); 
-            handleSendMessage(); 
+      <div className="p-3 border-t bg-background sticky bottom-0 z-10">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleSendMessage()
           }}
           className="flex items-center gap-2"
         >
-          <Input 
+          <Input
+            type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={isLoading ? "AI 응답을 기다리는 중..." : "메시지를 입력하세요..."}
-            className="flex-grow"
-            autoFocus
-            disabled={isLoading}
+            placeholder="메시지를 입력하세요..."
+            className="flex-1 text-sm sm:text-base"
+            disabled={isLoading || isClearingChat}
+            aria-label="채팅 메시지 입력"
           />
-          <Button 
-            type="submit" 
-            aria-label="메시지 전송" 
-            disabled={!inputValue.trim() || isLoading}
-            className="h-10 w-10 p-0 flex items-center justify-center flex-shrink-0 rounded-md"
-          >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" /> 
-            ) : (
-              <PaperPlaneIcon className="h-5 w-5" /> 
-            )}
+          <Button type="submit" size="icon" disabled={isLoading || inputValue.trim() === '' || isClearingChat} aria-label="메시지 전송">
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <PaperPlaneIcon className="h-5 w-5" />}
           </Button>
         </form>
+        {aiResponseCount >= 5 && (
+          <p className="text-xs text-muted-foreground mt-1 text-center">
+            AI 응답은 현재 세션에서 최대 10회까지 가능합니다. (현재: {aiResponseCount}회)
+          </p>
+        )}
       </div>
     </div>
   )

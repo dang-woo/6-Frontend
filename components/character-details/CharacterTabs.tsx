@@ -43,12 +43,16 @@ export function CharacterTabs({ character }: CharacterTabsProps) {
   }
 
   return (
-    <Tabs defaultValue="equipment" className="w-full">
-      <TabsList className="grid w-full grid-cols-4 md:grid-cols-8">
+    <Tabs defaultValue="equipment" className="w-full mt-4">
+      <TabsList className="grid h-auto w-full grid-cols-4 sm:grid-cols-5 md:grid-cols-8 gap-1">
         {tabItems.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value} className="text-xs md:text-sm">
-            <tab.icon className="w-4 h-4 mr-1 md:w-5 md:h-5" />
-            {tab.label}
+          <TabsTrigger 
+            key={tab.value} 
+            value={tab.value} 
+            className="text-xs p-1 sm:p-2 sm:text-sm flex flex-col sm:flex-row items-center justify-center h-auto sm:h-10"
+          >
+            <tab.icon className="w-4 h-4 mb-1 sm:mb-0 sm:mr-1 md:w-5 md:h-5" />
+            <span className="block w-full text-center sm:w-auto sm:inline">{tab.label}</span>
           </TabsTrigger>
         ))}
       </TabsList>
