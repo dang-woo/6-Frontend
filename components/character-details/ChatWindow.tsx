@@ -58,16 +58,53 @@ function formatMessageText(text: string): (string | React.JSX.Element)[] | strin
 
 const AI_LOADING_MESSAGE_ID = 'ai-loading-message';
 
+const MIN_CHAT_WIDTH = 320; // 최소 너비 (px)
+const MIN_CHAT_HEIGHT = 300; // 최소 높이 (px)
+
 export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('')
-  const [aiResponseCount, setAiResponseCount] = useState(0) // AI 응답 횟수 상태
-  const [isLoading, setIsLoading] = useState(false); // 로딩 상태 추가
-  const [isClearingChat, setIsClearingChat] = useState(false); // 채팅 초기화 로딩 상태
+  const [isLoading, setIsLoading] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
-  // characterId가 변경될 때 localStorage에서 대화 기록 로드 및 초기 메시지 설정
+  // 새로 추가된 상태 변수들
+  const [characterUsedCount, setCharacterUsedCount] = useState(0); // 캐릭터가 사용한 횟수
+  const [accountRemaining, setAccountRemaining] = useState<number | null>(null); // 계정 전체 남은 횟수
+  const [chatLimitMessage, setChatLimitMessage] = useState<string | null>(null); // 한도 관련 안내 메시지
+
+  // State for resizable chat window (PC only)
+  const chatWindowRef = useRef<HTMLDivElement>(null); // 채팅창 전체를 참조
+  const [isResizing, setIsResizing] = useState(false);
+  const [chatWindowSize, setChatWindowSize] = useState({ width: 380, height: 500 }); // 초기 PC 크기
+  const [initialMousePos, setInitialMousePos] = useState({ x: 0, y: 0 });
+  const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
+  const [isMobileView, setIsMobileView] = useState(false); // 모바일 뷰인지 확인
+
+  useEffect(() => {
+    const checkMobileView = () => {
+      setIsMobileView(window.innerWidth < 640); // sm 브레이크포인트 기준
+    };
+    checkMobileView();
+    window.addEventListener('resize', checkMobileView);
+    return () => window.removeEventListener('resize', checkMobileView);
+  }, []);
+
+  // Function to fetch initial chat limits or state if needed when characterId changes
+  // This could be an API call or derived from existing data
+  const fetchInitialChatState = async (charId: string) => {
+    // Placeholder: 실제로는 여기서 API를 호출하여 초기 횟수/한도 정보를 가져올 수 있습니다.
+    // 예를 들어, 사용자가 이전에 이 캐릭터와 채팅한 기록이 서버에 있다면,
+    // 그 때의 characterUsedCount, accountRemaining 등을 가져올 수 있습니다.
+    // 지금은 characterId 변경 시 0과 null로 초기화하고, 첫 메시지 전송 시 값을 받습니다.
+    // 만약 페이지 로드 시점에 채팅 횟수를 알아야 한다면, 이 함수를 채우거나
+    // page.tsx 등 부모 컴포넌트에서 정보를 받아 props로 넘겨야 합니다.
+    // 우선은 메시지 전송 시 받는 정보로 업데이트하는 현재 로직을 유지합니다.
+    console.log('Fetching initial chat state for', charId); // 실제 구현 시 이 부분 수정
+    // 예시: setCharacterUsedCount(fetchedUsedCount); setAccountRemaining(fetchedAccountRemaining);
+  };
+
   useEffect(() => {
     const storedMessages = localStorage.getItem(`chatHistory_${characterId}`);
     if (storedMessages) {
@@ -75,213 +112,184 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
         const parsedMessagesFromStorage = JSON.parse(storedMessages) as Message[];
         const messagesWithDateObjects = parsedMessagesFromStorage.map(msg => ({
           ...msg,
-          timestamp: new Date(msg.timestamp) // 문자열을 Date 객체로 변환
+          timestamp: new Date(msg.timestamp)
         }));
-        // isLoading 플래그가 true로 저장된 메시지가 있을 경우 제거 (예: 브라우저 강제 종료)
         setMessages(messagesWithDateObjects.filter(msg => !msg.isLoading));
       } catch (error) {
-        console.error('Error parsing stored messages from localStorage or converting timestamp:', error);
-        // 파싱 오류 시 기본 초기 메시지로 설정
+        console.error('Error parsing stored messages or converting timestamp:', error);
         setMessages([{ id: '1', text: '안녕하세요! 무엇을 도와드릴까요?', sender: 'ai', timestamp: new Date() }]);
       }
     } else {
       setMessages([{ id: '1', text: '안녕하세요! 무엇을 도와드릴까요?', sender: 'ai', timestamp: new Date() }]);
     }
-    // characterId가 바뀌면 AI 응답 횟수도 초기화되어야 할 수 있습니다. (정책에 따라 결정)
-    // setAiResponseCount(0); // 필요시 주석 해제
+    setCharacterUsedCount(0);
+    setAccountRemaining(null); 
+    setChatLimitMessage(null);
+    fetchInitialChatState(characterId); // 초기 상태 가져오기 호출
   }, [characterId]);
 
-  // messages 상태가 변경될 때 localStorage에 저장 (AI 로딩 메시지 제외)
   useEffect(() => {
-    // 초기 로드 시 messages가 빈 배열일 수 있으므로, 빈 배열 저장을 방지
     if (messages.length > 0) {
       const messagesToStore = messages.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID);
       localStorage.setItem(`chatHistory_${characterId}`, JSON.stringify(messagesToStore));
-    } else {
-      // 메시지가 비어있다면 (예: 초기화 직후 아직 메시지 없는 상태) 로컬 스토리지에서도 해당 characterId의 기록을 지울 수 있습니다.
-      // 또는, 초기 메시지가 항상 있도록 하려면 이 로직은 필요 없습니다.
-      // 현재는 messages.length > 0 조건 때문에 빈 배열이 저장되는 것을 막고 있습니다.
-      // 만약 사용자가 모든 메시지를 지우고 창을 닫았다가 다시 열었을 때 빈 상태를 원한다면,
-      // 이 else 블록에서 localStorage.removeItem(`chatHistory_${characterId}`)를 호출할 수 있습니다.
-      // 하지만 현재는 첫 메시지가 항상 있도록 위에서 처리하고 있으므로, 여기서는 특별한 동작을 하지 않습니다.
-    }
+    } 
   }, [messages, characterId]);
 
-  const handleSendMessage = async () => {
-    if (inputValue.trim() === '' || isLoading) return // 로딩 중이면 전송 방지
-
-    const token = localStorage.getItem('accessToken'); // 예시: localStorage에서 토큰 가져오기
-    if (!token) {
-      // TODO: 좀 더 나은 UI/UX로 사용자에게 알림 (예: 토스트 메시지, 모달 등)
-      alert('채팅을 이용하려면 로그인이 필요합니다.');
-      setMessages(prevMessages => [...prevMessages, {
-        id: Date.now().toString() + '-auth-error',
-        text: '채팅을 이용하려면 로그인이 필요합니다. 로그인 후 다시 시도해주세요.',
-        sender: 'ai',
-        timestamp: new Date()
-      }]);
-      return;
-    }
-
-    const userMessageText = inputValue.trim();
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: userMessageText,
-      sender: 'user',
-      timestamp: new Date()
-    }
-    
-    // AI 응답 대기 메시지 추가
-    const loadingMessage: Message = {
-      id: AI_LOADING_MESSAGE_ID,
-      text: 'AI가 답변을 생성 중입니다...',
-      sender: 'ai',
-      timestamp: new Date(),
-      isLoading: true
-    }
-    setMessages(prevMessages => [...prevMessages, userMessage, loadingMessage]);
-    setInputValue('');
-    setIsLoading(true);
-
-    try {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-      // 위에서 이미 토큰 유무를 확인했으므로, 여기서는 바로 할당합니다.
-      headers['Authorization'] = `Bearer ${token}`;
-      
-      const response = await fetch(`/api/df/chat?characterId=${characterId}&questionMessage=${encodeURIComponent(userMessageText)}`, {
-        method: 'POST',
-        headers, 
+  const handleResizeMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isMobileView) return;
+    e.preventDefault(); // 기본 동작 방지 (예: 텍스트 선택)
+    setIsResizing(true);
+    setInitialMousePos({ x: e.clientX, y: e.clientY });
+    if (chatWindowRef.current) {
+      setInitialSize({
+        width: chatWindowRef.current.offsetWidth,
+        height: chatWindowRef.current.offsetHeight,
       });
-
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          // TODO: 좀 더 나은 UI/UX (토스트, 모달 등) 및 로그아웃 처리 또는 로그인 페이지 이동 유도
-          alert('인증에 실패했습니다. 다시 로그인해주세요.');
-          setMessages(prevMessages => [...prevMessages, {
-            id: Date.now().toString() + '-auth-fail',
-            text: '인증 정보가 유효하지 않습니다. 다시 로그인 후 시도해주세요.',
-            sender: 'ai',
-            timestamp: new Date()
-          }]);
-        } else {
-          console.error('AI 채팅 API 호출 실패:', response.statusText);
-          const errorData = await response.json().catch(() => ({})); // 오류 응답 파싱 시도
-          const errorMessage = errorData?.error || errorData?.message || '죄송합니다, 메시지 처리에 실패했습니다. 다시 시도해주세요.';
-          const errorResponse: Message = {
-            id: Date.now().toString() + '-error',
-            text: errorMessage,
-            sender: 'ai',
-            timestamp: new Date()
-          }
-          setMessages(prevMessages => [...prevMessages, errorResponse]);
-        }
-        return;
-      }
-
-      const data = await response.json(); // data is ResponseAIDTO
-
-      if (data.answer) { // AI의 답변이 있는 경우
-        const aiResponseMessage: Message = {
-          id: Date.now().toString() + '-ai',
-          text: data.answer,
-          sender: 'ai',
-          timestamp: new Date()
-        }
-        setMessages(prevMessages => [...prevMessages, aiResponseMessage]);
-        setAiResponseCount(prevCount => prevCount + 1);
-
-        // 백엔드가 answer와 함께 한도 관련 message를 보낼 수도 있지만,
-        // 현재 DFController 로직 상으로는 answer가 있으면 한도 메시지는 별도로 처리하지 않는 것으로 보임.
-        // 만약 함께 온다면 아래와 같이 처리 가능
-        /*
-        if (data.message && data.message.includes('채팅창 한도에 도달했습니다')) {
-           const limitMessageText = data.message.includes('초기화됩니다') ? data.message : '채팅창 한도에 도달했습니다. 새로운 대화를 시작해주세요.';
-           const limitMessage: Message = {
-            id: Date.now().toString() + '-limit',
-            text: limitMessageText,
-            sender: 'ai',
-            timestamp: new Date()
-          };
-          setMessages(prev => [...prev, limitMessage]);
-          if (data.message.includes('초기화됩니다')) {
-            setAiResponseCount(0);
-          }
-        }
-        */
-      } else if (data.message && data.message.includes('채팅창 한도에 도달했습니다')) { // 답변은 없고, 한도 초과 메시지만 있는 경우
-        const resetMessage: Message = {
-          id: Date.now().toString() + '-reset',
-          text: data.message, // "채팅창 한도에 도달했습니다. 채팅 내역이 초기화됩니다."
-          sender: 'ai',
-          timestamp: new Date()
-        }
-        setMessages(prevMessages => [...prevMessages, resetMessage, {
-          id: 'reset-prompt',
-          text: '새로운 대화를 시작해주세요.',
-          sender: 'ai',
-          timestamp: new Date()
-        }])
-        setAiResponseCount(0); // 한도 초과로 초기화되었으므로 카운트 리셋
-      } else {
-        // AI 응답도 없고, 특정 한도 초과 메시지도 아닌 경우 (예: 다른 오류 메시지 또는 예상치 못한 응답)
-        const unexpectedResponse: Message = {
-          id: Date.now().toString() + '-ai-error',
-          text: data.message || 'AI 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.',
-          sender: 'ai',
-          timestamp: new Date()
-        }
-        setMessages(prevMessages => [...prevMessages, unexpectedResponse]);
-      }
-
-    } catch (error) {
-      // TODO: 네트워크 오류 등 예외 처리
-      console.error('AI 채팅 중 오류 발생:', error);
-      const errorResponse: Message = {
-        id: Date.now().toString() + '-exception',
-        text: '메시지 전송 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.',
-        sender: 'ai',
-        timestamp: new Date()
-      }
-      setMessages(prevMessages => [...prevMessages, errorResponse]);
-    } finally {
-      setMessages(prev => prev.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID));
-      setIsLoading(false);
     }
-  }
+  };
 
-  const handleClearChat = async () => {
-    if (!confirm('정말로 채팅 내역을 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+  useEffect(() => {
+    if (isMobileView || !isResizing) return;
+
+    const handleResizeMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - initialMousePos.x;
+      const dy = e.clientY - initialMousePos.y;
+      // 왼쪽 상단 핸들이므로, 마우스 이동 방향의 반대로 크기 변경
+      let newWidth = initialSize.width - dx;
+      let newHeight = initialSize.height - dy;
+
+      // 최소/최대 크기 제한 (선택 사항)
+      newWidth = Math.max(MIN_CHAT_WIDTH, newWidth);
+      newHeight = Math.max(MIN_CHAT_HEIGHT, newHeight);
+      // newWidth = Math.min(window.innerWidth - chatWindowRef.current?.offsetLeft || 0, newWidth); // 최대 너비 제한
+      // newHeight = Math.min(window.innerHeight - chatWindowRef.current?.offsetTop || 0, newHeight); // 최대 높이 제한
+
+      setChatWindowSize({ width: newWidth, height: newHeight });
+    };
+
+    const handleResizeMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleResizeMouseMove);
+    document.addEventListener('mouseup', handleResizeMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMouseMove);
+      document.removeEventListener('mouseup', handleResizeMouseUp);
+    };
+  }, [isResizing, initialMousePos, initialSize, isMobileView]);
+
+  const handleSendMessage = async () => {
+    if (inputValue.trim() === '' || isLoading || isClearingChat || characterUsedCount >= 5 || (accountRemaining !== null && accountRemaining <= 0)) {
       return;
     }
 
     const token = localStorage.getItem('accessToken');
     if (!token) {
-      toast({ title: '인증 오류', description: '채팅 내역을 삭제하려면 로그인이 필요합니다.', variant: 'destructive' });
+      toast({ title: '로그인 필요', description: '채팅을 이용하려면 로그인이 필요합니다.', variant: 'destructive' });
+      setMessages(prev => [...prev, { id: Date.now().toString(), text: '로그인이 필요합니다.', sender: 'ai', timestamp: new Date() }]);
       return;
     }
 
+    const userMessageText = inputValue.trim();
+    const userMessage: Message = { id: Date.now().toString(), text: userMessageText, sender: 'user', timestamp: new Date() };
+    const loadingMessage: Message = { id: AI_LOADING_MESSAGE_ID, text: 'AI가 답변을 생성 중입니다...', sender: 'ai', timestamp: new Date(), isLoading: true };
+    
+    setMessages(prevMessages => [...prevMessages, userMessage, loadingMessage]);
+    setInputValue('');
+    setIsLoading(true);
+    setChatLimitMessage(null); // 이전 한도 메시지 초기화
+
+    try {
+      const response = await fetch(`/api/df/chat?characterId=${characterId}&questionMessage=${encodeURIComponent(userMessageText)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      });
+
+      // 로딩 메시지 제거는 finally로 이동
+      // setMessages(prev => prev.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID)); 
+
+      const data = await response.json(); // success, message, answer, aiRequestCount, accountRemainingCount 등 포함 가능
+
+      if (!response.ok) {
+        // HTTP 에러 상태 (4xx, 5xx). data 객체는 백엔드가 보낸 오류 메시지를 포함할 수 있음
+        const errMsg = data?.message || data?.error || '메시지 처리 중 오류가 발생했습니다.';
+        setMessages(prev => [...prev.filter(m => m.id !== AI_LOADING_MESSAGE_ID), { id: Date.now().toString(), text: errMsg, sender: 'ai', timestamp: new Date() }]);
+        setChatLimitMessage(errMsg); // 오류 메시지를 한도 메시지로 표시
+        if (data?.accountRemainingCount !== undefined) setAccountRemaining(data.accountRemainingCount);
+        // characterUsedCount는 오류 시 보통 변경되지 않거나, 백엔드가 명시적으로 알려줘야 함
+        if (data?.aiRequestCount !== undefined) setCharacterUsedCount(data.aiRequestCount);
+        else if (data?.characterRemainingCount === 0) setCharacterUsedCount(5);
+        return; // 여기서 함수 종료
+      }
+      
+      // 응답 성공 (response.ok === true)
+      // data는 ResponseAIDTO 또는 성공 시의 Map 객체 (컨트롤러 로직에 따라 다름)
+      // 컨트롤러에서는 성공 시 ResponseAIDTO를 body로 감싸서 보냄
+
+      if (data.answer) {
+        const aiResponseMessage: Message = { id: Date.now().toString() + '-ai', text: data.answer, sender: 'ai', timestamp: new Date() };
+        setMessages(prev => [...prev.filter(m => m.id !== AI_LOADING_MESSAGE_ID), aiResponseMessage]);
+      } else if (data.message && !data.success) {
+         // data.success가 false이고, answer는 없지만 message가 있는 경우 (주로 한도 도달 시)
+        const limitInfoMessage: Message = { id: Date.now().toString() + '-limitinfo', text: data.message, sender: 'ai', timestamp: new Date() }; 
+        setMessages(prev => [...prev.filter(m => m.id !== AI_LOADING_MESSAGE_ID), limitInfoMessage]);
+        setChatLimitMessage(data.message);
+      }
+      // 성공했으므로 항상 횟수 업데이트 시도
+      setCharacterUsedCount(data.aiRequestCount || characterUsedCount); // 기존 값 유지 또는 업데이트
+      setAccountRemaining(data.accountRemainingCount !== undefined ? data.accountRemainingCount : accountRemaining);
+
+      // 추가적인 한도 메시지 처리 (data.limitMessage 또는 횟수 기반)
+      if (data.limitMessage) {
+        setChatLimitMessage(data.limitMessage);
+      } else if (data.aiRequestCount >= 5) {
+        setChatLimitMessage("캐릭터의 일일 채팅 한도(5회)에 도달했습니다. 내일 다시 시도해주세요.");
+      } else if (data.accountRemainingCount !== undefined && data.accountRemainingCount <= 0) {
+        setChatLimitMessage("계정의 일일 AI 채팅 한도(20회)에 도달했습니다. 내일 다시 시도해주세요.");
+      }
+
+    } catch (error) {
+      console.error('AI 채팅 중 네트워크 또는 JSON 파싱 오류 발생:', error);
+      const errorResponse: Message = { id: Date.now().toString(), text: '메시지 전송/응답 처리 중 오류가 발생했습니다.', sender: 'ai', timestamp: new Date() };
+      setMessages(prev => [...prev.filter(m => m.id !== AI_LOADING_MESSAGE_ID), errorResponse]);
+      setChatLimitMessage('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setMessages(prev => prev.filter(msg => msg.id !== AI_LOADING_MESSAGE_ID));
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!confirm('정말로 채팅 내역을 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return;
+    }
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      toast({ title: '인증 오류', description: '채팅 내역을 삭제하려면 로그인이 필요합니다.', variant: 'destructive' });
+      return;
+    }
     setIsClearingChat(true);
     try {
       const response = await fetch(`/api/df/chat?characterId=${characterId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
-
       if (response.ok) {
         setMessages([
           { id: '1', text: '안녕하세요! 무엇을 도와드릴까요?', sender: 'ai', timestamp: new Date() },
           { id: 'cleared', text: '채팅 내역이 초기화되었습니다.', sender: 'ai', timestamp: new Date() }
         ]);
-        setAiResponseCount(0);
-        localStorage.removeItem(`chatHistory_${characterId}`); // localStorage에서도 삭제
+        setCharacterUsedCount(0); // 캐릭터 사용 횟수 초기화
+        setChatLimitMessage(null);    // 한도 메시지 없음으로 설정
+        // accountRemaining은 초기화하지 않음 (계정 전체 한도는 유지)
+        localStorage.removeItem(`chatHistory_${characterId}`);
         toast({ title: '채팅 초기화 완료', description: '채팅 내역이 성공적으로 삭제되었습니다.'});
       } else {
-        const errorData = await response.json().catch(() => ({ message: '채팅 내역 삭제에 실패했습니다.'}));
-        toast({ title: '초기화 실패', description: errorData.message || '채팅 내역 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
+        const errorData = await response.json().catch(() => ({}));
+        const errMsg = errorData.message || '채팅 내역 삭제 중 오류가 발생했습니다.';
+        toast({ title: '초기화 실패', description: errMsg, variant: 'destructive' });
       }
     } catch (error) {
       toast({ title: '네트워크 오류', description: '채팅 내역 삭제 중 네트워크 오류가 발생했습니다.', variant: 'destructive' });
@@ -292,13 +300,12 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault(); // 기본 Enter 동작 (줄바꿈 등) 방지
+      event.preventDefault(); 
       handleSendMessage();
     }
   };
 
   useEffect(() => {
-    // 새 메시지가 추가될 때 스크롤을 맨 아래로 이동
     if (scrollAreaRef.current) {
       const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scrollarea-viewport]');
       if (scrollElement) {
@@ -307,18 +314,35 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
     }
   }, [messages]);
 
+  const isInputDisabled = isLoading || isClearingChat || characterUsedCount >= 5 || (accountRemaining !== null && accountRemaining <= 0) || (chatLimitMessage !== null && chatLimitMessage.includes('한도'));
+
+  // Dynamic style for the chat window based on isMobileView and chatWindowSize
+  const getChatWindowStyle = () => {
+    if (isMobileView) {
+      return { inset: '0px' }; // 모바일에서는 전체 화면
+    }
+    // PC에서는 크기 조절된 값 또는 기본값 사용
+    // sm:bottom-[calc(2rem+3.5rem+0.5rem)] sm:right-8 등 위치 스타일은 className으로 처리
+    return {
+      width: `${chatWindowSize.width}px`,
+      height: `${chatWindowSize.height}px`,
+    };
+  };
+
   return (
     <div 
+      ref={chatWindowRef}
       className={`
         fixed z-[100] flex flex-col bg-background shadow-xl border
-        inset-0 sm:inset-auto 
-        sm:bottom-[calc(2rem+3.5rem+0.5rem)] sm:right-8 
-        sm:w-[380px] sm:h-[500px] 
-        sm:max-h-[calc(100vh-10rem)] 
-        sm:rounded-lg
+        ${isMobileView 
+          ? 'inset-0 rounded-none' 
+          : 'sm:bottom-[calc(2rem+3.5rem+0.5rem)] sm:right-8 sm:rounded-lg'
+        }
+        ${isResizing ? 'cursor-grabbing' : ''} // 크기 조절 중 커서 변경 (선택 사항)
       `}
+      style={getChatWindowStyle()} // 동적 스타일 적용
     >
-      <div className="flex items-center justify-between p-3 border-b sticky top-0 bg-background z-10">
+      <div className="flex items-center justify-between p-3 border-b sticky top-0 bg-background z-10 cursor-default select-none">
         <h3 className="text-lg font-semibold">AI 캐릭터 상담</h3>
         <div className="flex items-center gap-1">
           <Button 
@@ -337,7 +361,7 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
         </div>
       </div>
 
-      <ScrollArea ref={scrollAreaRef} className="flex-1 p-3 sm:p-4 space-y-3">
+      <ScrollArea ref={scrollAreaRef} className="flex-1 p-3 sm:p-4 space-y-3 select-none">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -364,7 +388,7 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
         ))}
       </ScrollArea>
 
-      <div className="p-3 border-t bg-background sticky bottom-0 z-10">
+      <div className="p-3 border-t bg-background sticky bottom-0 z-10 select-none">
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -379,19 +403,43 @@ export function ChatWindow({ characterId, onClose }: ChatWindowProps) {
             onKeyPress={handleKeyPress}
             placeholder="메시지를 입력하세요..."
             className="flex-1 text-sm sm:text-base"
-            disabled={isLoading || isClearingChat}
+            disabled={isInputDisabled}
             aria-label="채팅 메시지 입력"
           />
-          <Button type="submit" size="icon" disabled={isLoading || inputValue.trim() === '' || isClearingChat} aria-label="메시지 전송">
+          <Button type="submit" size="icon" disabled={isInputDisabled || inputValue.trim() === ''} aria-label="메시지 전송">
             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <PaperPlaneIcon className="h-5 w-5" />}
           </Button>
         </form>
-        {aiResponseCount >= 5 && (
-          <p className="text-xs text-muted-foreground mt-1 text-center">
-            AI 응답은 현재 세션에서 최대 10회까지 가능합니다. (현재: {aiResponseCount}회)
-          </p>
-        )}
+        <div className="mt-1.5 text-center text-xs">
+          {chatLimitMessage && (
+            <p className="text-destructive">{chatLimitMessage}</p>
+          )}
+          {!chatLimitMessage && (accountRemaining !== null || characterUsedCount >= 0) && (
+            <p className="text-muted-foreground">
+              캐릭터: {characterUsedCount}/5회 | 계정: {accountRemaining === null ? '-' : accountRemaining}회 남음
+            </p>
+          )}
+        </div>
       </div>
+
+      {/* Resizer Handle (PC View Only) */}
+      {!isMobileView && (
+        <div
+          onMouseDown={handleResizeMouseDown} // 이벤트 핸들러 연결
+          className={`
+            absolute top-0 left-0 w-4 h-4 cursor-nwse-resize bg-transparent
+            hover:bg-primary/20 active:bg-primary/30
+            touch-none select-none // 터치 및 선택 방지
+          `}
+          title="크기 조절"
+          style={{ zIndex: 110 }}
+        >
+          <svg viewBox="0 0 10 10" className="w-full h-full fill-current text-muted-foreground opacity-50 pointer-events-none">
+            {/* 왼쪽 상단 핸들에 맞는 SVG 아이콘 (기존 것과 유사하게 대각선으로 표현) */}
+            <path d="M 0 10 L 10 0 L 8 0 L 0 8 Z M 4 0 L 0 4 L 0 6 L 6 0 Z M 0 0 L 10 10 L 10 8 L 2 0 Z" />
+          </svg>
+        </div>
+      )}
     </div>
   )
 } 
