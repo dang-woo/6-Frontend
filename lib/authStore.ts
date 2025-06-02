@@ -71,6 +71,10 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem('user')
         }
         Cookies.remove('accessToken', { path: '/' });
+        // 로그인 페이지로 리디렉션
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'; 
+        }
       },
       initializeAuth: () => {
         set({ isLoading: true })
