@@ -300,7 +300,7 @@ export interface RuneDTO {
 export interface TalismanItemDTO {
   itemId: string;
   itemName: string;
-  itemImage: string;
+  // itemImage: string; // API 응답에 없으므로 제거
 }
 
 // API 응답 내의 'talismans' 배열의 각 요소 타입 (개별 탈리스만 슬롯 정보)
