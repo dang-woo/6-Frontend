@@ -197,7 +197,7 @@ export function MyPageClientContent({
   const handleConfirmAccountDeletion = async () => {
     setIsDeletingAccount(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/account`, { // 백엔드 엔드포인트 (가정)
+      const response = await fetch(`${API_BASE_URL}/api/auth`, { // 원래 엔드포인트로 복구
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -206,9 +206,7 @@ export function MyPageClientContent({
 
       if (response.ok) {
         setToastInfo({ title: '회원 탈퇴 성공', description: '계정이 성공적으로 삭제되었습니다. 이용해주셔서 감사합니다.' });
-        clearAuth(); // 로그아웃 및 리디렉션 (토스트는 authStore의 것을 따름, 추후 개선 가능)
-        // 참고: clearAuth()가 내부적으로 페이지를 리디렉션하므로, setIsAccountDeleteModalOpen(false)는 호출 안해도 될 수 있습니다.
-        // 하지만 상태를 명시적으로 닫아주는 것이 좋습니다.
+        clearAuth();
       } else {
         const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류가 발생했습니다.' }));
         setToastInfo({ title: '회원 탈퇴 실패', description: errorData.message || '계정 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -218,7 +216,7 @@ export function MyPageClientContent({
       setToastInfo({ title: '회원 탈퇴 오류', description: '네트워크 오류 또는 서버 문제로 계정 삭제에 실패했습니다.', variant: 'destructive' });
     } finally {
       setIsDeletingAccount(false);
-      setIsAccountDeleteModalOpen(false); // 모달 닫기
+      setIsAccountDeleteModalOpen(false);
     }
   };
 
