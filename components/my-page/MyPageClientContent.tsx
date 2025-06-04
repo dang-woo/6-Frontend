@@ -5,10 +5,27 @@ import * as React from 'react'
 import { MyPageHeader } from '@/components/my-page/MyPageHeader'
 import { NoCharactersMessage } from '@/components/my-page/NoCharactersMessage'
 import { CharacterRegistrationModal } from '@/components/my-page/CharacterRegistrationModal'
+import { AccountDeletionModal } from '@/components/my-page/AccountDeletionModal'
 import type { CharacterSearchResult, ServerOption } from '@/types/dnf'
 import { CharacterCard } from '@/components/search/CharacterCard'
 import { Button } from '@/components/ui/button' // 삭제 UI에 사용될 수 있으므로 import 유지
 import { useToast } from '@/components/ui/use-toast' // Shadcn UI useToast 임포트
+import { useAuthStore } from '@/lib/authStore' // 경로 수정
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select" // Select 컴포넌트 임포트 추가
+import { CharacterComparisonResult } from './CharacterComparisonResult'
+import { Input } from '@/components/ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL; // API_BASE_URL 정의
 
@@ -26,8 +43,11 @@ const serverOptionsData: ServerOption[] = [
   { value: 'bakal', label: '바칼' }
 ];
 
-// getServerNameById 함수는 CharacterCard 내부에서 serverOptions를 사용하므로 여기서 필요 없어짐
-// const getServerNameById = (serverId: string): string => { ... };
+// 서버 ID로 서버 이름을 찾는 헬퍼 함수 추가
+const getServerNameById = (serverId: string): string => {
+  const server = serverOptionsData.find(option => option.value === serverId);
+  return server ? server.label : serverId; // 서버 이름을 찾지 못하면 serverId 반환
+};
 
 interface MyPageClientContentProps {
   initialCharacters: CharacterSearchResult[];
@@ -45,6 +65,24 @@ export function MyPageClientContent({
   const [selectedCharacters, setSelectedCharacters] = React.useState<Set<string>>(new Set());
   const { toast } = useToast(); // useToast 사용 복원
   const [toastInfo, setToastInfo] = React.useState<{ title: string, description: string, variant?: 'default' | 'destructive' } | null>(null);
+
+  // 회원 탈퇴 관련 상태 추가
+  const [isAccountDeleteModalOpen, setIsAccountDeleteModalOpen] = React.useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
+  const { clearAuth } = useAuthStore(); // Zustand 스토어에서 clearAuth 가져오기
+
+  // 캐릭터 비교 관련 상태 추가
+  const [charCompare1, setCharCompare1] = React.useState<CharacterSearchResult | null>(null);
+  const [charCompare2, setCharCompare2] = React.useState<CharacterSearchResult | null>(null);
+  const [comparisonResult, setComparisonResult] = React.useState<any[] | null>(null); // API 응답 타입에 맞게 수정 필요
+  const [isComparing, setIsComparing] = React.useState(false);
+  const [comparisonError, setComparisonError] = React.useState<string | null>(null);
+
+  // 캐릭터 검색을 위한 상태 추가
+  const [searchServer, setSearchServer] = React.useState<string>('');
+  const [searchCharacterName, setSearchCharacterName] = React.useState('');
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [searchedCharacter, setSearchedCharacter] = React.useState<CharacterSearchResult | null>(null);
 
   React.useEffect(() => {
     if (toastInfo) {
@@ -155,6 +193,205 @@ export function MyPageClientContent({
     }
   };
 
+  // 회원 탈퇴 처리 함수
+  const handleConfirmAccountDeletion = async () => {
+    setIsDeletingAccount(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/account`, { // 백엔드 엔드포인트 (가정)
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+      });
+
+      if (response.ok) {
+        setToastInfo({ title: '회원 탈퇴 성공', description: '계정이 성공적으로 삭제되었습니다. 이용해주셔서 감사합니다.' });
+        clearAuth(); // 로그아웃 및 리디렉션 (토스트는 authStore의 것을 따름, 추후 개선 가능)
+        // 참고: clearAuth()가 내부적으로 페이지를 리디렉션하므로, setIsAccountDeleteModalOpen(false)는 호출 안해도 될 수 있습니다.
+        // 하지만 상태를 명시적으로 닫아주는 것이 좋습니다.
+      } else {
+        const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류가 발생했습니다.' }));
+        setToastInfo({ title: '회원 탈퇴 실패', description: errorData.message || '계정 삭제 중 오류가 발생했습니다.', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error("Account deletion error:", error);
+      setToastInfo({ title: '회원 탈퇴 오류', description: '네트워크 오류 또는 서버 문제로 계정 삭제에 실패했습니다.', variant: 'destructive' });
+    } finally {
+      setIsDeletingAccount(false);
+      setIsAccountDeleteModalOpen(false); // 모달 닫기
+    }
+  };
+
+  // 캐릭터 검색 함수
+  const handleSearchCharacter = async () => {
+    if (!searchServer || !searchCharacterName.trim()) {
+      setToastInfo({ 
+        title: '검색 오류', 
+        description: '서버와 캐릭터 이름을 모두 입력해주세요.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/df/character/search?server=${searchServer}&characterName=${encodeURIComponent(searchCharacterName)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.length > 0) {
+          setSearchedCharacter(data[0]);
+          setCharCompare2(data[0]);
+        } else {
+          setToastInfo({ 
+            title: '검색 결과 없음', 
+            description: '해당하는 캐릭터를 찾을 수 없습니다.', 
+            variant: 'destructive' 
+          });
+          setSearchedCharacter(null);
+          setCharCompare2(null);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ message: '캐릭터 검색에 실패했습니다.' }));
+        setToastInfo({ 
+          title: '검색 실패', 
+          description: errorData.message || '캐릭터 검색 중 오류가 발생했습니다.', 
+          variant: 'destructive' 
+        });
+      }
+    } catch (error) {
+      console.error("Character search error:", error);
+      setToastInfo({ 
+        title: '검색 오류', 
+        description: '네트워크 오류 또는 서버 문제로 검색에 실패했습니다.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // 캐릭터 비교 섹션 수정
+  const renderComparisonSection = () => {
+    if (!hasAdventurers || registeredCharacters.length < 1) return null;
+
+    return (
+      <div className="mt-12 pt-8 border-t">
+        <h3 className="text-xl font-semibold mb-4">캐릭터 비교</h3>
+        <div className="space-y-4">
+          {/* 내 캐릭터 선택 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">내 캐릭터 선택</label>
+            <Select 
+              onValueChange={(value) => {
+                const selected = registeredCharacters.find(c => c.characterId === value.split('_')[1] && c.serverId === value.split('_')[0]);
+                setCharCompare1(selected || null);
+              }}
+              value={charCompare1 ? `${charCompare1.serverId}_${charCompare1.characterId}` : undefined}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="비교할 캐릭터 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {registeredCharacters.map(char => (
+                  <SelectItem key={`${char.serverId}_${char.characterId}`} value={`${char.serverId}_${char.characterId}`}>
+                    {char.characterName} ({getServerNameById(char.serverId)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 다른 캐릭터 검색 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">다른 캐릭터 검색</label>
+            <div className="flex gap-2">
+              <Select value={searchServer} onValueChange={setSearchServer}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="서버 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {serverOptionsData.filter(s => s.value !== 'all' && s.value !== 'adventure').map(server => (
+                    <SelectItem key={server.value} value={server.value}>
+                      {server.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="캐릭터명 입력"
+                value={searchCharacterName}
+                onChange={(e) => setSearchCharacterName(e.target.value)}
+                className="flex-1"
+              />
+              <Button 
+                onClick={handleSearchCharacter} 
+                disabled={isSearching || !searchServer || !searchCharacterName.trim()}
+              >
+                {isSearching ? '검색 중...' : '검색'}
+              </Button>
+            </div>
+          </div>
+
+          {/* 비교 버튼 */}
+          <div className="flex justify-end mt-4">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <Button 
+                      // onClick={handleCompareCharacters} 
+                      disabled={true}
+                      className="w-full md:w-auto"
+                    >
+                      준비중입니다
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>캐릭터 비교 기능은 현재 개발중입니다.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* 검색 결과 표시 */}
+          {searchedCharacter && (
+            <div className="mt-4">
+              <h4 className="text-lg font-semibold mb-2">검색된 캐릭터</h4>
+              <div className="w-full max-w-xs">
+                <CharacterCard 
+                  character={searchedCharacter}
+                  serverOptions={serverOptionsData}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 비교 결과 */}
+          {isComparing && <p className="text-center py-4">캐릭터 정보를 비교 중입니다...</p>}
+          {comparisonError && <p className="text-red-500 text-center py-4">{comparisonError}</p>}
+          {comparisonResult && (
+            <div className="mt-6">
+              <h4 className="text-lg font-semibold mb-3">비교 결과</h4>
+              <CharacterComparisonResult 
+                comparisonData={comparisonResult} 
+                serverOptions={serverOptionsData}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 max-w-6xl">
       <MyPageHeader 
@@ -231,10 +468,35 @@ export function MyPageClientContent({
         !isEditMode && <NoCharactersMessage onOpenModalAction={() => setIsModalOpen(true)} />
       )}
 
+      {renderComparisonSection()}
+
+      {/* 회원 탈퇴 섹션 추가 */}
+      <div className="mt-12 pt-8 border-t">
+        <h3 className="text-xl font-semibold mb-3">계정 관리</h3>
+        <Button 
+          variant="destructive"
+          onClick={() => setIsAccountDeleteModalOpen(true)}
+          disabled={isDeletingAccount}
+        >
+          {isDeletingAccount ? "처리 중..." : "회원 탈퇴"}
+        </Button>
+        <p className="text-sm text-muted-foreground mt-2">
+          계정을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.
+        </p>
+      </div>
+
       <CharacterRegistrationModal 
         isOpen={isModalOpen} 
         onCloseAction={() => setIsModalOpen(false)} 
         onCharacterRegisteredAction={handleCharacterRegistered} 
+      />
+
+      {/* 회원 탈퇴 확인 모달 렌더링 */}
+      <AccountDeletionModal
+        isOpen={isAccountDeleteModalOpen}
+        onClose={() => setIsAccountDeleteModalOpen(false)}
+        onConfirm={handleConfirmAccountDeletion}
+        isLoading={isDeletingAccount}
       />
     </div>
   )
