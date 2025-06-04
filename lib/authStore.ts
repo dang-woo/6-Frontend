@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import Cookies from 'js-cookie'
+import { useToast } from '@/hooks/use-toast'
 
 interface User {
   userId: string
@@ -64,6 +65,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       clearAuth: () => {
+        const { toast } = useToast.getState()
         set({ accessToken: null, refreshToken: null, user: null, isLoggedIn: false, isLoading: false })
         if (isLocalStorageAvailable()) {
           localStorage.removeItem('accessToken')
@@ -71,9 +73,17 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem('user')
         }
         Cookies.remove('accessToken', { path: '/' });
-        // 로그인 페이지로 리디렉션
+        
+        // 사용자에게 알림
+        toast({
+          title: "로그아웃",
+          description: "세션이 만료되어 자동으로 로그아웃되었습니다. 다시 로그인해주세요.",
+          variant: "default", // 또는 "destructive"
+        })
+
+        // 메인 페이지로 리디렉션
         if (typeof window !== 'undefined') {
-          window.location.href = '/login'; 
+          window.location.href = '/'; 
         }
       },
       initializeAuth: () => {
