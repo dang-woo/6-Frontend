@@ -26,6 +26,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Card } from '@/components/ui/card'
+import Image from 'next/image'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL; // API_BASE_URL 정의
 
@@ -233,8 +235,9 @@ export function MyPageClientContent({
 
     setIsSearching(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/df/character/search?server=${searchServer}&characterName=${encodeURIComponent(searchCharacterName)}`,
+      // 1. 기본 검색
+      const searchResponse = await fetch(
+        `${API_BASE_URL}/api/df/search?server=${searchServer}&name=${encodeURIComponent(searchCharacterName)}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -242,33 +245,45 @@ export function MyPageClientContent({
         }
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.length > 0) {
-          setSearchedCharacter(data[0]);
-          setCharCompare2(data[0]);
-        } else {
-          setToastInfo({ 
-            title: '검색 결과 없음', 
-            description: '해당하는 캐릭터를 찾을 수 없습니다.', 
-            variant: 'destructive' 
-          });
-          setSearchedCharacter(null);
-          setCharCompare2(null);
+      if (!searchResponse.ok) {
+        throw new Error('캐릭터 검색에 실패했습니다.');
+      }
+
+      const searchData = await searchResponse.json();
+      if (searchData && searchData.rows && searchData.rows.length > 0) {
+        const character = searchData.rows[0];
+        
+        // 2. 상세 정보 조회
+        const detailResponse = await fetch(
+          `${API_BASE_URL}/api/df/character?server=${character.serverId}&characterId=${character.characterId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            },
+          }
+        );
+
+        if (!detailResponse.ok) {
+          throw new Error('캐릭터 상세 정보 조회에 실패했습니다.');
         }
+
+        const detailData = await detailResponse.json();
+        setSearchedCharacter(detailData);
+        setCharCompare2(detailData);
       } else {
-        const errorData = await response.json().catch(() => ({ message: '캐릭터 검색에 실패했습니다.' }));
         setToastInfo({ 
-          title: '검색 실패', 
-          description: errorData.message || '캐릭터 검색 중 오류가 발생했습니다.', 
+          title: '검색 결과 없음', 
+          description: '해당하는 캐릭터를 찾을 수 없습니다.', 
           variant: 'destructive' 
         });
+        setSearchedCharacter(null);
+        setCharCompare2(null);
       }
     } catch (error) {
       console.error("Character search error:", error);
       setToastInfo({ 
         title: '검색 오류', 
-        description: '네트워크 오류 또는 서버 문제로 검색에 실패했습니다.', 
+        description: error instanceof Error ? error.message : '네트워크 오류 또는 서버 문제로 검색에 실패했습니다.', 
         variant: 'destructive' 
       });
     } finally {
@@ -340,36 +355,90 @@ export function MyPageClientContent({
 
           {/* 비교 버튼 */}
           <div className="flex justify-end mt-4">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <Button 
-                      // onClick={handleCompareCharacters} 
-                      disabled={true}
-                      className="w-full md:w-auto"
-                    >
-                      준비중입니다
-                    </Button>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>캐릭터 비교 기능은 현재 개발중입니다.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button 
+              onClick={async () => {
+                if (!charCompare1 || !charCompare2) {
+                  setToastInfo({
+                    title: '비교 오류',
+                    description: '비교할 캐릭터를 모두 선택해주세요.',
+                    variant: 'destructive'
+                  });
+                  return;
+                }
+                setIsComparing(true);
+                setComparisonError(null);
+                try {
+                  const response = await fetch(
+                    `${API_BASE_URL}/api/df/character/compare?` + 
+                    `server=${charCompare1.serverId}&characterId=${charCompare1.characterId}&` +
+                    `compareServer=${charCompare2.serverId}&compareCharacterId=${charCompare2.characterId}`,
+                    {
+                      headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                      },
+                    }
+                  );
+
+                  if (!response.ok) {
+                    throw new Error('캐릭터 비교 중 오류가 발생했습니다.');
+                  }
+
+                  const data = await response.json();
+                  setComparisonResult(data);
+                } catch (error) {
+                  console.error('Character comparison error:', error);
+                  setComparisonError('캐릭터 비교 중 오류가 발생했습니다.');
+                  setToastInfo({
+                    title: '비교 오류',
+                    description: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
+                    variant: 'destructive'
+                  });
+                } finally {
+                  setIsComparing(false);
+                }
+              }}
+              disabled={!charCompare1 || !charCompare2 || isComparing}
+              className="w-full md:w-auto"
+            >
+              {isComparing ? '비교 중...' : '캐릭터 비교하기'}
+            </Button>
           </div>
 
           {/* 검색 결과 표시 */}
           {searchedCharacter && (
             <div className="mt-4">
               <h4 className="text-lg font-semibold mb-2">검색된 캐릭터</h4>
-              <div className="w-full max-w-xs">
-                <CharacterCard 
-                  character={searchedCharacter}
-                  serverOptions={serverOptionsData}
-                />
-              </div>
+              <Card 
+                className={`p-3 cursor-pointer hover:bg-muted/50 transition-colors ${
+                  charCompare2?.characterId === searchedCharacter.characterId ? 'ring-2 ring-primary bg-muted/30' : ''
+                }`}
+                onClick={() => {
+                  if (charCompare2?.characterId === searchedCharacter.characterId) {
+                    setCharCompare2(null);
+                  } else {
+                    setCharCompare2(searchedCharacter);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative w-12 h-12 flex-shrink-0">
+                    <Image 
+                      src={searchedCharacter.imageUrl || '/images/placeholder.png'} 
+                      alt={searchedCharacter.characterName} 
+                      fill 
+                      sizes="48px"
+                      className="rounded-md border bg-secondary object-cover aspect-square"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate" title={searchedCharacter.characterName}>
+                      {searchedCharacter.characterName} <span className="text-xs text-muted-foreground">(Lv.{searchedCharacter.level})</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{searchedCharacter.jobGrowName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{getServerNameById(searchedCharacter.serverId)}</p>
+                  </div>
+                </div>
+              </Card>
             </div>
           )}
 

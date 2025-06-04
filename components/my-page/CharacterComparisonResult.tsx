@@ -1,10 +1,13 @@
 'use client'
 
 import Image from 'next/image'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import Link from 'next/link'
+import { Card, CardContent } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ServerOption } from '@/types/dnf'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
 
 interface Equipment {
   slotName: string
@@ -29,6 +32,9 @@ interface Character {
   adventureName?: string
   guildName?: string
   equipment?: Equipment[]
+  creatureName?: string
+  titleName?: string
+  auraName?: string
 }
 
 interface CharacterAuction {
@@ -80,104 +86,151 @@ export function CharacterComparisonResult({ comparisonData, serverOptions }: Cha
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-2 gap-3 sm:gap-6">
       {comparisonData.map((data, index) => (
-        <Card key={data.character.characterId || index} className="h-full flex flex-col border">
-          <CardHeader className="p-0 relative aspect-square overflow-hidden rounded-t-md">
+        <Card key={data.character.characterId || index} className="overflow-hidden">
+          <Link 
+            href={`/character/${data.character.serverId}/${data.character.characterId}`}
+            className="relative aspect-[2/1] overflow-hidden block group"
+          >
             {data.character.imageUrl ? (
               <Image
                 src={data.character.imageUrl}
                 alt={data.character.characterName}
-                width={180}
-                height={180}
-                className="object-cover w-full h-full"
+                fill
+                className="object-cover transition-transform group-hover:scale-105"
                 priority={false}
                 unoptimized
               />
             ) : (
-              <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground rounded-t-md text-xs sm:text-sm">
-                이미지 없음
+              <div className="w-full h-full bg-muted flex items-center justify-center">
+                <span className="text-muted-foreground">이미지 없음</span>
               </div>
             )}
-          </CardHeader>
-          <CardContent className="p-4 flex-grow flex flex-col gap-4">
-            {/* 기본 정보 */}
-            <div>
-              <h3 className="text-xl font-semibold truncate" title={data.character.characterName}>
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 sm:p-4">
+              <h3 className="text-base sm:text-xl font-bold text-white truncate">
                 {data.character.characterName}
               </h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-white/90">
                 Lv.{data.character.level} {data.character.jobGrowName}
-                <span className="text-xs ml-2">({data.character.jobName})</span>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                서버: {getServerNameByIdLocal(data.character.serverId, serverOptions)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                모험단: {data.character.adventureName || '-'}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                길드: {data.character.guildName || '-'}
               </p>
             </div>
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="text-white text-sm sm:text-base font-medium">상세정보 보기</span>
+            </div>
+          </Link>
 
-            {/* 장비 정보 */}
-            {data.character.equipment && data.character.equipment.length > 0 && (
-              <div>
-                <h4 className="font-semibold mb-2">주요 장비</h4>
-                <ScrollArea className="h-[200px] rounded-md border p-2">
-                  <div className="space-y-2">
-                    {data.character.equipment.map((equip, idx) => (
-                      <div key={idx} className="text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{equip.slotName}:</span>
-                          <span className={getRarityColor(equip.itemRarity)}>
-                            {equip.itemName}
-                            {equip.reinforce && equip.reinforce !== '0' && ` +${equip.reinforce}`}
-                          </span>
-                        </div>
-                        {equip.itemGradeName && (
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            {equip.itemGradeName}
-                          </Badge>
-                        )}
-                        {equip.enchant?.status && (
-                          <div className="ml-4 text-xs text-muted-foreground">
-                            {equip.enchant.status.map((stat, statIdx) => (
-                              <div key={statIdx}>
-                                {stat.name}: {stat.value}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="overview" className="text-xs sm:text-sm px-1 sm:px-4">개요</TabsTrigger>
+              <TabsTrigger value="equipment" className="text-xs sm:text-sm px-1 sm:px-4">장비</TabsTrigger>
+              <TabsTrigger value="auction" className="text-xs sm:text-sm px-1 sm:px-4">가격</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="p-2 sm:p-4 space-y-2 sm:space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">서버</span>
+                  <span className="font-medium">{getServerNameByIdLocal(data.character.serverId, serverOptions)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">직업</span>
+                  <span className="font-medium">{data.character.jobName}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">전직</span>
+                  <span className="font-medium">{data.character.jobGrowName}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">모험단</span>
+                  <span className="font-medium">{data.character.adventureName || '-'}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">길드</span>
+                  <span className="font-medium">{data.character.guildName || '-'}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">명성</span>
+                  <span className="font-medium">{data.character.fame || '0'}</span>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="equipment" className="p-2 sm:p-4">
+              <ScrollArea className="h-[200px] sm:h-[300px]">
+                <div className="space-y-2 sm:space-y-3">
+                  {data.character.equipment?.map((equip, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <span className="text-muted-foreground">{equip.slotName}</span>
+                        <span className={`font-medium ${getRarityColor(equip.itemRarity)}`}>
+                          {equip.itemName}
+                          {equip.reinforce && equip.reinforce !== '0' && (
+                            <span className="ml-1 text-primary">+{equip.reinforce}</span>
+                          )}
+                        </span>
                       </div>
-                    ))}
+                      {equip.itemGradeName && (
+                        <Badge variant="outline" className="text-[10px] sm:text-xs">
+                          {equip.itemGradeName}
+                        </Badge>
+                      )}
+                      {equip.enchant?.status && (
+                        <div className="pl-2 sm:pl-4 space-y-0.5">
+                          {equip.enchant.status.map((stat, statIdx) => (
+                            <div key={statIdx} className="text-[10px] sm:text-xs text-muted-foreground flex justify-between">
+                              <span>{stat.name}</span>
+                              <span>{stat.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {idx < (data.character.equipment?.length || 0) - 1 && <Separator className="my-2" />}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="auction" className="p-2 sm:p-4 space-y-2 sm:space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">칭호</span>
+                  <div className="text-right">
+                    <span className="font-medium">{data.character.titleName || '-'}</span>
+                    <span className="block text-[10px] sm:text-xs text-muted-foreground">
+                      {formatPrice(data.characterAuction.titlePrice)}
+                    </span>
                   </div>
-                </ScrollArea>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">오라</span>
+                  <div className="text-right">
+                    <span className="font-medium">{data.character.auraName || '-'}</span>
+                    <span className="block text-[10px] sm:text-xs text-muted-foreground">
+                      {formatPrice(data.characterAuction.auraPrice)}
+                    </span>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center text-xs sm:text-sm">
+                  <span className="text-muted-foreground">크리쳐</span>
+                  <div className="text-right">
+                    <span className="font-medium">{data.character.creatureName || '-'}</span>
+                    <span className="block text-[10px] sm:text-xs text-muted-foreground">
+                      {formatPrice(data.characterAuction.creaturePrice)}
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
-
-            {/* 가격 정보 */}
-            <div>
-              <h4 className="font-semibold mb-2">아이템 가격</h4>
-              <div className="space-y-1">
-                <p className="text-sm">
-                  칭호: {formatPrice(data.characterAuction.titlePrice)}
-                </p>
-                <p className="text-sm">
-                  오라: {formatPrice(data.characterAuction.auraPrice)}
-                </p>
-                <p className="text-sm">
-                  크리쳐: {formatPrice(data.characterAuction.creaturePrice)}
-                </p>
-              </div>
-            </div>
-
-            {/* 명성 */}
-            <p className="text-sm text-muted-foreground mt-auto">
-              명성: {data.character.fame || '정보 없음'}
-            </p>
-          </CardContent>
+            </TabsContent>
+          </Tabs>
         </Card>
       ))}
     </div>
